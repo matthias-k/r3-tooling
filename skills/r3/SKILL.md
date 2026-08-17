@@ -1,17 +1,168 @@
 ---
 name: r3
-description: STUB — not built yet. (When built:) use when working with r3 jobs — writing r3.yaml, find_latest/find_all dependencies, committing/checking out jobs, the r3 Python API (Repository/Job), or reading r3-based research jobs.
+description: Use when working with r3 jobs — authoring or reading an r3.yaml recipe, wiring find_latest/find_all or git dependencies, committing or checking out jobs, querying job metadata, the r3 Python API (Repository/Job), or tracing provenance/lineage across r3 jobs.
 ---
 
-# r3 — STUB (not built yet)
+# r3 — operating manual
 
-This is a placeholder. **Do not treat it as a working skill.**
+r3 stores computational jobs, their dependencies, and their outputs with provenance.
+This is a terse, task-indexed reference; detail lives in the sibling files
+`reference/gotchas.md`, `reference/python-api.md`, `reference/query-grammar.md`, and
+`scripts/r3dev.py`. Load them on demand.
 
-Build it from `../../docs/specs/2026-08-15-r3-skill-design.md` using the `writing-skills` skill, in a
-fresh session, **re-verifying every r3 claim against r3 `main`** (raw material in `../../raw-material/`
-is pinned to the tutorial's r3 and may lag main).
+> **Verified against r3 `main` `262a937` / v0.5.0 on 2026-08-17.** r3 grows with `main` —
+> confirm claims against live `r3` before relying on a subtlety (see "Keep this current").
 
-**Scope (pure r3 core only — see the spec):** mental model → *prefer the Python API (for agents)* →
-lifecycle → dependencies + query grammar → metadata/conventions (⚠ path-promotion in flight) →
-non-obvious behaviors → the *verify-against-live* habit. **No `xr3` or house conventions here** — those
-live in `../../extensions/`.
+## 1. What r3 is
+
+- **A job is a directory.** `commit` freezes the *recipe* (code + resolved deps) and
+  records a content **hash for integrity** — but a job's **identity is a fresh `uuid4`,
+  not content-addressed**: two identical recipes get two different ids.
+- **Immutable after commit, except `metadata.yaml` and `output/`.** `output/` is the one
+  place results persist; writing anywhere else during an in-place run hits the read-only
+  job dir (`PermissionError`).
+- **r3 is not an execution engine.** Its only runtime touchpoint is `r3 checkout` —
+  running the job is entirely your own code. There is no runner or scheduler; `run.sh`
+  and a `commands:` key are not r3 concepts (a `commands:` key is inert).
+- **The job dir is free-form.** Every non-ignored file freezes into the recipe — configs,
+  notes, design docs, specs — not just executable code.
+- **Provenance = frozen deps.** Dependencies pin to git commit hashes and job uuids at
+  commit time. Because metadata is mutable and *not* hashed and deps pin uuids, you can
+  reorganize your `path`/tags later without breaking any committed job.
+
+## 2. CLI for the lifecycle, the Python API for graph work
+
+**Use the CLI for lifecycle verbs.** It is the permission-bounded default: allowlisting
+`Bash(r3 …:*)` grants a bounded, auditable verb set, whereas driving the API means
+granting arbitrary code execution.
+
+| Verb | Does |
+|------|------|
+| `r3 init <path>` | create a repository (the one verb with no `--repository`) |
+| `r3 commit <jobdir>` | freeze a job; prints the bare uuid |
+| `r3 checkout <id> <workdir>` | materialize a committed job into a fresh workdir |
+| `r3 remove <id>` | delete a job (refuses if another job depends on it) |
+| `r3 find [-t TAG]… [-l] [--latest]` | list jobs — **tag-only** |
+| `r3 rebuild-index` | rebuild the query index from the job files |
+| `r3 edit <id>` | open `$EDITOR` on `metadata.yaml`, then reindex |
+
+Every verb but `init` reads the repository from `$R3_REPOSITORY` or `--repository`;
+`R3_REPOSITORY=""` counts as unset.
+
+**The Python API is r3's general interface to the job graph — for reading *and* reshaping
+it**, not a fixed list of fallbacks. Reach for it whenever the task is working over the
+graph rather than running one lifecycle verb — e.g. *find every job, in any dependency
+order, that transitively uses repo X at commit Y*. Entry points: `r3.Repository(path)`
+(`find`, `checkout`, `commit`, `remove`, `find_dependents`, `jobs`, `repo[id]`) and
+`r3.Job(dir)`. Details → `reference/python-api.md`.
+
+Two things the CLI does not cover, that an environment's own tooling often does:
+
+- **Querying beyond tags.** CLI `find` matches tags only. For path, arbitrary metadata,
+  `$glob`, or ranges, use `repo.find(query, latest)` or `find_latest`/`find_all` deps. (A
+  JSON-query CLI option is planned upstream.)
+- **Dev checkout** — running a job *before* committing it. Deliberately user-owned; see the
+  lifecycle below and `scripts/r3dev.py`.
+
+## 3. Lifecycle
+
+1. **Author.** Write `run.py` (or whatever runs). `r3.yaml` and `metadata.yaml` are
+   optional — commit synthesizes them.
+2. **Run.** A dependency-free job runs **in place** (`cd <jobdir> && python run.py`). Once
+   it has dependencies, `r3 checkout <id> <workdir>` first to materialize them. The workdir
+   is **throwaway scratch** — only its `output/` symlink persists back to the store, and the
+   target must not already exist.
+3. **Dev checkout** (running an *uncommitted* job): r3 removed the CLI command for this on
+   purpose. The primitive is `repo.checkout(unresolved_dep, dir)`; `scripts/r3dev.py` is a
+   ~25-line reference loop. A dev checkout materializes only the deps (no `output/` symlink)
+   and **cannot change what you commit** — committing discards dev artifacts.
+4. **Update an outdated job:** re-commit the authored dir — commit re-resolves each
+   `find_latest`/`find_all` to the now-current match.
+5. **Remove / reclaim.** `r3 remove` refuses (nonzero exit) if any job depends on the
+   target. Reclaim disk by deleting a job's `output/` (record it in `metadata.yaml` so an
+   empty `output/` reads as intentional). `rm -rf` on a committed job fails (its dir is
+   read-only) — use `r3 remove`, or `chmod -R +w` first.
+
+## 4. Dependencies & queries
+
+**Git dependency** — `{repository, destination, source?, branch?/tag?/commit?}`.
+**github.com only** (https or ssh). With no pin, it resolves to the remote's
+**default-branch HEAD** at commit and freezes the 40-hex `commit:` (a `branch:`/`tag:` does
+not round-trip). Cached as a bare clone under `<repo>/git/github.com/<owner>/<name>`.
+
+**Job dependency** — `{find_latest|find_all: <query>, destination, source?,
+recursive_checkout?}`. Resolves at commit and keeps **both** the loose query and the
+resolved `job: <uuid>`. Materialization:
+
+- `source: "."` + `recursive_checkout: true` (both defaults) → a **recursive real copy**,
+  including the dependency's own transitive deps.
+- otherwise → a **symlink** (`source: output` symlinks to the upstream's `output/`; any
+  non-`.` source is always a symlink).
+
+So `source:` selects **scope, not duplication**.
+
+**Reading old recipes:** the deprecated string form `query: '#tag #tag'` (space-separated
+tags, AND'd) is common in older jobs — recognize it; steer new jobs to
+`find_latest`/`find_all`. Dependency constructors in the API are **destination-first** (see
+`reference/python-api.md`).
+
+**`ignore`** — absolute, exact-segment patterns only (`/output`, `/cache`); no globs, no
+`.gitignore` semantics. `output/` is excluded from every commit **unconditionally** anyway;
+use `ignore` for other non-output artifacts (caches, rendered files, `__pycache__`).
+
+**Query grammar (overview).** Mongo-style, but only a subset: logical `$and`/`$or`/`$not`/
+`$nor` plus implicit-AND (multi-key dict); field conditions `$eq` (implicit) `/$ne/$in/
+$nin/$gt/$gte/$lt/$lte/$glob/$all/$elemMatch`; `find({})` matches all. The **full grammar,
+array semantics, and the sharp gotchas → `reference/query-grammar.md`.**
+
+## 5. Metadata & the `path` convention
+
+`metadata.yaml` is **mutable, not hashed**, and must be **JSON-representable** — a bare YAML
+date raises `TypeError` at commit, so quote dates. Edit it via `r3 edit`, or edit the file
+and `r3 rebuild-index`.
+
+`tags` is the only metadata field r3's *tooling* privileges today (`find --tag`, `#tag`
+rendering in `find -l`).
+
+**`path` is the recommended organizing convention** — a virtual-filesystem path that
+`find_latest`/`find_all` build on. It is queryable like any other metadata field, but not
+yet surfaced by the CLI (`--path` / an `r3 ls` are planned). Treat these as examples, not
+rules:
+
+- Flat (`kodak`) or nested (`datasets/kodak`, `my-project/experiments/pilot`).
+- A `path` **need not be unique** — a whole sweep can share one; `find_latest` picks the
+  newest, `find_all` returns them all.
+- A `path` is a **movable namespace** — re-path later; frozen deps are unaffected.
+- Groups often prefix paths with a project name for global uniqueness — one option, not a
+  mandate.
+
+## 6. Non-obvious behaviors
+
+r3 has several agent-biting behaviors. **Before relying on a subtlety, read
+`reference/gotchas.md`.** The three that bite most:
+
+- `find` (without `--latest`) returns rows in **unstable order** — never read it as a
+  timeline.
+- A **recursive checkout omits the dependency's `metadata.yaml`** (and `r3.yaml`) — read a
+  dependency's parameters from a committed file, never from its checked-out metadata.
+- `output/` is the **only writable, persisted** location in a job.
+
+## 7. Local tooling may supersede parts of this
+
+Vanilla r3 is the floor. Environments commonly wrap it — a richer `find`, a dev-checkout
+helper, a submit wrapper, a pre-commit convention checker, and so on. If the user or the
+repo indicates such tooling exists (a project CLI on `PATH`, a house skill, the repo's
+CLAUDE.md/README), prefer it for that operation over the raw CLI/API.
+
+## 8. Keep this current
+
+r3 tracks `main`, which moves. **Confirm against live `r3 --help`, live behavior, or the
+source — not memory** — before relying on any version-sensitive detail.
+
+The validity stamp at the top turns re-verification into a diff: run
+`git log 262a937..main` on the r3 repo, focused on the CLI, `find`/query, checkout, and
+`path`-promotion areas, and fold in what changed. In particular, the unstable-`find`-order
+behavior is expected to gain an ordering upstream — check for it.
+
+Your environment may also layer house/lab conventions on top of vanilla r3 — see your
+environment's own docs for those.
