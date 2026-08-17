@@ -35,14 +35,20 @@ how it was built and kept current.
 ## Layout
 
 **Use-facing:**
-- `skills/r3/` — **the pure r3 skill** (install this).
-- `extensions/research-workflow-additions.md` — house conventions to fold into `RESEARCH_WORKFLOW.md`.
+- `skills/r3/` — **the pure r3 skill** (install this). This is the only thing you need to *use* r3.
 
-**Build provenance / maintenance** (not needed to *use* the skill):
+**Build provenance / maintenance** (how the skill was made; not needed to use it):
 - `docs/specs/` — the design spec · `docs/superpowers/plans/` — the build plan.
-- `docs/r3-upstream-doc-issues.md` — doc/code fixes to make in the r3 repo upstream.
-- `raw-material/r3-findings.md` — the **verified mined knowledge base** the skill was authored from
-  (dense working material; kept for re-verifying the skill against future r3 versions).
+- `raw-material/` — the verified mined knowledge base (`r3-findings.md`) + a superseded snapshot; see its
+  `README.md`.
+
+**Follow-up notes** (things to reconcile in *other* repos — not part of this repo's skill):
+- `docs/r3-upstream-doc-issues.md` — doc/code fixes to make in the r3 repo (upstream).
+- `docs/research-workflow-additions.md` — house conventions to fold into your `RESEARCH_WORKFLOW.md`.
+
+**Extensions (planned):** `extensions/` is the future home of the house layer — `xr3`, migrated
+`RESEARCH_WORKFLOW` conventions, examples, the galvani `g` helper. Not vendored yet (shape undecided); see
+`extensions/README.md`.
 
 ## Status
 

@@ -1,5 +1,9 @@
 # r3 — non-obvious behaviors (raw material for an r3 skill)
 
+> **Superseded — kept for provenance.** This is an *earlier* gotcha catalog pinned to an older r3
+> (`c968f42`). The current, verified knowledge base is **`r3-findings.md`**, which supersedes this wherever
+> they differ. Don't rely on this file.
+
 Everything about r3 that was **not** clear up front while building this tutorial — assumptions
 that turned out wrong, and behaviors you can only learn by reading the source or probing. Verified
 against the pinned r3 (`c968f42`, r3 `0.5.0`; some notes predate PR #54/#55). Intended as input for
