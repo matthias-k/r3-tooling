@@ -119,8 +119,21 @@ before cleaning. See the checkout section of `gotchas.md`.
 ## Working over the graph
 
 The API is open-ended — reach for it whenever the task is reading or reshaping the graph
-rather than running one lifecycle verb. Two illustrations (not a fixed menu):
+rather than running one lifecycle verb. Three illustrations (not a fixed menu):
 
+- **Trace provenance *upstream*** — read what a committed job was built on, and recurse:
+
+  ```python
+  for dep in repo[job_id].dependencies:          # a committed job's resolved dependencies
+      if isinstance(dep, r3.GitDependency):
+          print(dep.repository, dep.commit)      # exact git repo + 40-hex commit
+      else:                                       # a JobDependency
+          print(dep.job, dep.source, dep.destination)   # upstream job uuid + what was taken
+          upstream = repo[dep.job]               # walk up: recurse on its .dependencies
+  ```
+
+  `dep.job` is the upstream **uuid**; `repo[dep.job]` fetches it, so you recurse to trace a
+  result's full lineage. (A committed job's stored `r3.yaml` records the same, frozen.)
 - **Blast radius of a bad input** — `repo.find_dependents(job, recursive=True)` returns the
   exact transitive set of jobs that depend on `job` (answers "is anything downstream
   compromised?").

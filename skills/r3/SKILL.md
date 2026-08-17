@@ -100,7 +100,9 @@ out the whole job root, one subdir per match; a `source:` key on `find_all` rais
 - otherwise → a **symlink** (`source: output` symlinks to the upstream's `output/`; any
   non-`.` source is always a symlink).
 
-So `source:` selects **scope, not duplication**.
+So `source:` selects **scope, not duplication**. A `find_latest`/`find_all` that **matches
+nothing fails the commit** (`ValueError: Cannot resolve dependency: <query>`) — a mistyped
+query surfaces at commit, not silently.
 
 **Reading old recipes:** the deprecated string form `query: '#tag #tag'` (space-separated
 tags, AND'd) is common in older jobs — recognize it; steer new jobs to
@@ -256,6 +258,13 @@ transitively uses repo X at commit Y*. Two things the CLI does not cover that th
 environment's own tooling) does: **querying beyond tags** (see "Finding jobs & queries") and
 **dev checkout** (see "Running & the lifecycle"). Entry points are `r3.Repository(path)` and
 `r3.Job(dir)` → `reference/python-api.md`.
+
+**Inspecting a committed job — there is no `r3 show`.** A committed job lives read-only at
+`$R3_REPOSITORY/jobs/<uuid>/`; the repository also holds `git/`, `index.sqlite`, and a
+**repo-root `r3.yaml` that only marks the repository format version — not a job recipe** (a
+common confusion). To inspect a job, read its `r3.yaml` / `metadata.yaml` / `output/` there, or
+open it with `r3.Job(dir)`. **Job ids are full 36-char uuids** — there is no prefix / short-id
+matching, so a partial id is treated as "not found".
 
 ## 9. Non-obvious behaviors
 
