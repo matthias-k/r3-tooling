@@ -60,43 +60,51 @@ before it's introduced, or missing to actually do the task.
    the **job dir is free-form** (every non-ignored file freezes — configs, modules, notes — not just
    code); **`output/` is the one place results persist**; and because metadata is mutable + not hashed and
    deps pin uuids, you can **reorganize `path`/tags later without breaking committed jobs**.
-2. **Authoring a job.** Authoring is *implementing everything the job needs*: a **run file** (`run.py` /
-   `run.sh` are canonical names), usually **config** (e.g. `config.yaml`), and often **more** — extra
-   modules, whole sub-package directories, data-prep code — **plus declaring the job's dependencies** (git
-   deps and job deps via `find_latest`/`find_all` queries). Constructing the right dependency queries is
-   part of authoring, not an afterthought. `r3.yaml` (the recipe) and `metadata.yaml` are optional —
-   `commit` synthesizes them.
-3. **Dependencies in depth.** Git deps (`repository`/`destination`/`source?` + `branch?`/`tag?`/`commit?`;
+2. **Authoring a job.** Authoring is *implementing whatever the job's purpose requires* — usually a **run
+   file** (`run.py`/`run.sh`), but **r3 requires none and is agnostic to what a job does**: besides a
+   compute job (run → write `output/`), a job may **provide** something to downstream jobs (e.g. serve a
+   model over a local API) or just **hold** data. Plus config (`config.yaml`), often more (modules,
+   sub-packages, data-prep), **and declaring the job's dependencies** (git + `find_latest`/`find_all`
+   queries — part of authoring, not an afterthought). Making a git dep **importable** is the run script's
+   job, not r3's — narrow `source:` to the package subdir, or check out the whole repo and set
+   `PYTHONPATH`/`sys.path` (whole-repo also eases editing/upstreaming). `r3.yaml` and `metadata.yaml` are
+   optional — `commit` synthesizes them.
+3. **A worked example** — a complete `r3.yaml` (a git dep + a `find_latest` job dep) + `metadata.yaml`, and
+   the end-to-end command sequence (author → dev-run → `commit` → `checkout` → run → find), stating that
+   **dev output is throwaway and persisted results come from running the committed checkout**. This is the
+   concrete anchor a task-indexed reference needs — the agent-as-cold-reader review found its absence was
+   the top blocker to acting from the skill.
+4. **Dependencies in depth.** Git deps (`repository`/`destination`/`source?` + `branch?`/`tag?`/`commit?`;
    **github.com-only**; resolve→freeze to a 40-hex commit at commit time). Job deps
    (`find_latest`/`find_all`; materialization = **symlink vs recursive real copy**, decided by
    `source`+`recursive_checkout`; `find_all` takes no `source`; **`source:` = scope, not duplication**).
    The deprecated `query: '#tag'` string form (recognize it in old recipes). `ignore` (absolute,
    exact-segment patterns; `/output` is auto-excluded regardless).
-4. **Running & the lifecycle.** In-place for a dependency-free job; **`r3 checkout <id> <workdir>`** to
+5. **Running & the lifecycle.** In-place for a dependency-free job; **`r3 checkout <id> <workdir>`** to
    materialize deps and run (the workdir is **throwaway scratch** — only `output/` persists — which
    enables the ignored-`cache/` dev trick). **Dev-checkout** of an *uncommitted* job
    (`repo.checkout(unresolved_dep, dir)` + `scripts/r3dev.py`; materializes only deps and **cannot change
    what you commit**). **Update** an outdated job by **re-committing** (re-resolves each
    `find_latest`/`find_all`). **Remove / reclaim** (`r3 remove` refuses if depended-on; delete a job's
    `output/` to reclaim disk, noting it in `metadata.yaml`; `rm -rf` fails on the read-only dir).
-5. **Finding jobs & the query engine.** CLI `find` is **tag-only**; richer queries run through the API and
+6. **Finding jobs & the query engine.** CLI `find` is **tag-only**; richer queries run through the API and
    `find_latest`/`find_all` — the complete, verified Mongo-style grammar and its gotchas →
    `reference/query-grammar.md`. Plus `rebuild-index` and `edit`.
-6. **Metadata & the `path` convention.** `metadata.yaml` is mutable, **not hashed**, and must be
+7. **Metadata & the `path` convention.** `metadata.yaml` is mutable, **not hashed**, and must be
    **JSON-representable** (quote dates). `tags` is the one field tooling privileges today; **`path`** is
    the recommended organizing convention (§7) — presented as **examples, not rules**; a `path` need not be
    unique and is a **movable namespace**.
-7. **CLI vs the Python API (surface strategy, §4).** The CLI is the permission-bounded default for the
+8. **CLI vs the Python API (surface strategy, §4).** The CLI is the permission-bounded default for the
    lifecycle verbs (allowlist `Bash(r3 …:*)`); the **Python API** is r3's general interface for *working
    over the job graph* — reading *and* reshaping — framed open-endedly, with two named CLI-gaps
    (rich-query, dev-checkout). **Demoted from its former #2 slot:** it's a tooling choice, introduced only
    after the reader holds the concepts.
-8. **Non-obvious behaviors** — the agent-biting gotchas, drawn from `raw-material/tutorial-findings.md`
+9. **Non-obvious behaviors** — the agent-biting gotchas, drawn from `raw-material/tutorial-findings.md`
    (the verified mined inventory that supersedes `R3-GOTCHAS.md`) and §8, in a `reference/gotchas.md`
    loaded on demand. Highest-value live-on-main: unstable `find` order (no `ORDER BY` unless `--latest`;
    `rebuild-index` reshuffles); range ops match *all* rows on string fields (silent); github.com-only
    git deps; `rm -rf` fails on a committed job (`555`); a cosmetic `fatal:` on cold-cache commit.
-9. **The verify habit + a validity stamp.** r3 `main` moves, so the skill's standing instruction is
+10. **The verify habit + a validity stamp.** r3 `main` moves, so the skill's standing instruction is
    *confirm against live `r3 --help`/behavior/the source, not memory*, and it flags the version-sensitive
    areas. Concretely, **`SKILL.md` carries a validity stamp** — the r3 version + commit it was verified
    against (e.g. *Verified against r3 `262a937` / v0.5.0 on 2026-08-17*). That turns "re-verify" into a
@@ -104,7 +112,7 @@ before it's introduced, or missing to actually do the task.
    (CLI, query/`find`, checkout, path-promotion), to see what changed and plan a targeted update. Live
    example: MK intends to fix the unstable-`find`-order gotcha (add `ORDER BY`) — exactly the kind of
    change the stamp lets a future session catch and fold in.
-10. **Local tooling may supersede parts of this** (§5) — the neutral, shape-agnostic principle that lets
+11. **Local tooling may supersede parts of this** (§5) — the neutral, shape-agnostic principle that lets
    an environment's wrappers override, without the skill naming any.
 
 **Skill format:** one `SKILL.md` (YAML frontmatter: `name: r3`, a description that triggers on r3 job /
