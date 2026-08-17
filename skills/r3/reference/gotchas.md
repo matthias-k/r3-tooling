@@ -25,8 +25,9 @@ Query-operator traps live in `query-grammar.md`, not here.
   copies the job's own files (real copies), symlinks `output/` back to the store (so results
   written there persist), and materializes each dependency by its own rule. Only that
   `output/` symlink reaches the store — everything else in the workdir is disposable. The
-  **target must not already exist** (checkout does `os.makedirs` on it, and a failed
-  checkout leaves no target dir behind).
+  **target must not already exist** — checkout does `os.makedirs` on it, so if the target
+  already exists it fails before creating anything. (A checkout that fails *midway* has no
+  cleanup-on-failure and can leave a partial directory behind.)
 - **A recursive checkout of a job dependency omits that dependency's `metadata.yaml` and
   `r3.yaml`.** When a dep materializes as a recursive real copy (`source: "."` +
   `recursive_checkout: true`), r3 copies the upstream's code files but **skips its

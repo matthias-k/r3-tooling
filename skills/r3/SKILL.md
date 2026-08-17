@@ -90,9 +90,11 @@ Two things the CLI does not cover, that an environment's own tooling often does:
 frozen to the resolved commit, not preserved as a branch/tag. Cached as a bare clone under
 `<repo>/git/github.com/<owner>/<name>`.
 
-**Job dependency** — `{find_latest|find_all: <query>, destination, source?,
-recursive_checkout?}`. Resolves at commit and keeps **both** the loose query and the
-resolved `job: <uuid>`. Materialization:
+**Job dependency** — `{find_latest|find_all: <query>, destination, recursive_checkout?}`.
+`source?` is **`find_latest`-only** — a `find_all` recipe takes no `source` (it always checks
+out the whole job root, one subdir per match; a `source:` key on `find_all` raises
+`TypeError`). Resolves at commit and keeps **both** the loose query and the resolved
+`job: <uuid>`. Materialization:
 
 - `source: "."` + `recursive_checkout: true` (both defaults) → a **recursive real copy**,
   including the dependency's own transitive deps.
