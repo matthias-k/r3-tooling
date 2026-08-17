@@ -105,7 +105,8 @@ Authoring `mnist-eval`: it uses a library from github, depends on an existing da
 
 ```yaml
 dependencies:
-  - repository: https://github.com/example/toolbox   # whole repo → ./toolbox
+  - repository: https://github.com/example/toolbox   # the toolbox/ package → ./toolbox
+    source: toolbox                                  #   narrowed so ./toolbox imports directly
     destination: toolbox
   - find_latest: { path: datasets/mnist }            # newest dataset job at that path
     source: output                                   #   its output/ → ./data
@@ -119,8 +120,18 @@ path: experiments/mnist-eval
 tags: [mnist, eval]
 ```
 
-`run.py` reads `data/…`, imports the library (make it importable — see "Authoring a job"),
-and writes results to `output/`.
+`run.py` (run from the job dir, which is on `sys.path`):
+
+```python
+import os, toolbox                 # ./toolbox imports directly because of `source: toolbox` above
+data = open("data/train.idx", "rb").read()   # data/ symlinks the dataset job's output/
+os.makedirs("output", exist_ok=True)         # a dev run has no output/ symlink yet
+open("output/results.json", "w").write(toolbox.evaluate(data))
+```
+
+(Whole-repo alternative: omit `source:` to check out the entire repo — handy for editing and
+upstreaming — then add it to `PYTHONPATH` / `sys.path` in your run script; the import path then
+depends on the repo's layout.)
 
 **The flow:**
 
@@ -128,6 +139,7 @@ and writes results to `output/`.
 export R3_REPOSITORY=/path/to/repo          # or pass --repository each time
 
 # 1. Develop: materialize the deps in place and test-run (dev output is throwaway).
+#    (scripts/r3dev.py is bundled in this skill — copy it into your workspace or use its full path.)
 python scripts/r3dev.py checkout mnist-eval
 cd mnist-eval && python run.py              # writes a local output/ you can inspect
 cd .. && python scripts/r3dev.py cleanup mnist-eval

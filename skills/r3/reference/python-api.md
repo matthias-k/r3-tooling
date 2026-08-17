@@ -36,6 +36,7 @@ job = r3.Job(path, id=None, cached_timestamp=None, cached_metadata=None)
 
 | Member | Kind | Notes |
 |--------|------|-------|
+| `job.id` | attr → `str` or `None` | the job's uuid once committed (`None` before). `commit` returns a Job with it set; `repo[id]` keys on it. |
 | `job.metadata` | property → `dict` | `{}` when there is no `metadata.yaml`. Mutating the dict does **not** write to disk. |
 | `job.save_metadata()` | method | writes `job.metadata` back to `metadata.yaml`. Call it after any edit. |
 | `job.dependencies` | property → `Sequence[Dependency]` | the job's declared dependencies. |
