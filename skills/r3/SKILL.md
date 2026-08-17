@@ -102,14 +102,16 @@ out the whole job root, one subdir per match; a `source:` key on `find_all` rais
 
 So `source:` selects **scope, not duplication**. A `find_latest`/`find_all` that **matches
 nothing fails the commit** (`ValueError: Cannot resolve dependency: <query>`) — a mistyped
-query surfaces at commit, not silently.
+query surfaces at commit, not silently. (A *resolved* dep whose target or `source:` subpath is
+missing from the store fails similarly, with `Missing dependency`.)
 
 **Reading old recipes:** the deprecated string form `query: '#tag #tag'` (space-separated
 tags, AND'd) is common in older jobs — recognize it; steer new jobs to
 `find_latest`/`find_all`.
 
-**`ignore`** — absolute, exact-segment patterns only (`/output`, `/cache`); no globs, no
-`.gitignore` semantics. `output/` is excluded from every commit **unconditionally** anyway;
+**`ignore`** — absolute paths anchored at the job root, matched by exact path segments (may be
+nested, e.g. `/code/__pycache__`); no globs, no `.gitignore`, and a pattern without a leading
+`/` errors at commit. `output/` is excluded from every commit **unconditionally** anyway;
 use `ignore` for other non-output artifacts (caches, rendered files, `__pycache__`).
 
 ## 4. A worked example
@@ -273,8 +275,9 @@ r3 has several agent-biting behaviors. **Before relying on a subtlety, read
 
 - `find` (without `--latest`) returns rows in **unstable order** — never read it as a
   timeline.
-- A **recursive checkout omits the dependency's `metadata.yaml`** (and `r3.yaml`) — read a
-  dependency's parameters from a committed file, never from its checked-out metadata.
+- A **checkout omits `r3.yaml`/`metadata.yaml`** — the job's own *and* a recursively-copied
+  dependency's — so a running job can't read its own metadata; keep runtime parameters in a
+  committed file (e.g. `config.yaml`), never in `metadata.yaml`.
 - `output/` is the **only writable, persisted** location in a job.
 
 ## 10. Local tooling may supersede parts of this

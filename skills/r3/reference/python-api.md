@@ -82,7 +82,9 @@ QueryAllDependency(destination, query_all)
 ```
 
 Recognize the deprecated forms when reading old recipes; author new ones with
-`FindLatestDependency` / `FindAllDependency`.
+`FindLatestDependency` / `FindAllDependency`. (The `DeprecationWarning` fires at construction, but
+Python suppresses it by default outside `__main__`, so you generally won't *see* it via the CLI —
+spot the `query:` / `query_all:` keys in the recipe instead.)
 
 ## Dev-checkout loop
 
