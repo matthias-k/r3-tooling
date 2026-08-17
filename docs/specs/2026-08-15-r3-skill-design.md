@@ -104,7 +104,7 @@ before it's introduced, or missing to actually do the task.
    over the job graph* — reading *and* reshaping — framed open-endedly, with two named CLI-gaps
    (rich-query, dev-checkout). **Demoted from its former #2 slot:** it's a tooling choice, introduced only
    after the reader holds the concepts.
-9. **Non-obvious behaviors** — the agent-biting gotchas, drawn from `raw-material/tutorial-findings.md`
+9. **Non-obvious behaviors** — the agent-biting gotchas, drawn from `raw-material/r3-findings.md`
    (the verified mined inventory that supersedes `R3-GOTCHAS.md`) and §8, in a `reference/gotchas.md`
    loaded on demand. Highest-value live-on-main: unstable `find` order (no `ORDER BY` unless `--latest`;
    `rebuild-index` reshuffles); range ops match *all* rows on string fields (silent); github.com-only
@@ -260,7 +260,7 @@ organization should lean on. Precision to keep the skill true to `main`:
 ## 8. Verified-against-main corrections (the verify-habit payoff)
 
 Re-verification against `main` **changed several premises** the raw material leans on, and the whole
-tutorial has now been mined into **`raw-material/tutorial-findings.md`** (a deduplicated,
+tutorial has now been mined into **`raw-material/r3-findings.md`** (a deduplicated,
 verified-against-main inventory — the primary build input, superseding `R3-GOTCHAS.md`). The build
 session must use these, not the pinned gotchas:
 
@@ -318,7 +318,7 @@ session must use these, not the pinned gotchas:
   `main`, keep `remote.py`/remote-storage *out*). A clean `main` worktree is the safe way to read it.
   Package under `tools/r3/r3/`: `repository.py`, `job.py`, `query.py`, `cli.py`, `storage.py`,
   `index.py`, `utils.py`. Docs under `tools/r3/docs/`.
-- **`raw-material/tutorial-findings.md`** — the **verified mined inventory** of the whole tutorial (this
+- **`raw-material/r3-findings.md`** — the **verified mined inventory** of the whole tutorial (this
   session's 6-agent pass, re-checked against `main`). **Primary build input; supersedes `R3-GOTCHAS.md`.**
 - **`R3-GOTCHAS.md`** — `raw-material/R3-GOTCHAS.md` (pinned to `c968f42`, now superseded by the findings
   doc — kept for provenance); living original in `projects/r3-tutorial/`.
@@ -377,7 +377,7 @@ concerns MK's house tooling, not the skill's content.
 ## 13. Next steps
 
 1. `writing-plans` on this spec → a build plan for `skills/r3/`. The whole tutorial is now mined into
-   `raw-material/tutorial-findings.md` (verified vs `main`), so the plan can draw content from there
+   `raw-material/r3-findings.md` (verified vs `main`), so the plan can draw content from there
    rather than re-reading the tutorial.
 2. Build the skill with `writing-skills`, **re-verifying every r3 claim against `main`** as authored;
    seed `reference/gotchas.md` from the findings doc's gotcha buckets (F, D, H) and bundle the bare

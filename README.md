@@ -41,7 +41,7 @@ how it was built and kept current.
 **Build provenance / maintenance** (not needed to *use* the skill):
 - `docs/specs/` — the design spec · `docs/superpowers/plans/` — the build plan.
 - `docs/r3-upstream-doc-issues.md` — doc/code fixes to make in the r3 repo upstream.
-- `raw-material/tutorial-findings.md` — the **verified mined knowledge base** the skill was authored from
+- `raw-material/r3-findings.md` — the **verified mined knowledge base** the skill was authored from
   (dense working material; kept for re-verifying the skill against future r3 versions).
 
 ## Status

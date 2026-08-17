@@ -1,14 +1,15 @@
-# r3 tutorial — mined findings for the skill
+# r3 — verified findings (the skill's knowledge base)
 
 > **Build provenance — not user documentation.** This is the internal, verified inventory the r3 skill was
 > *authored from*; you do **not** need it to use the skill (see `skills/r3/`). It is dense working material,
 > kept so a future session can re-verify the skill against a newer r3. **To use r3, read the skill, not
 > this.**
 
-Consolidated from a 6-agent mining pass over the whole r3 tutorial (`playbook.qmd`, `DESIGN.md`,
-`R3-OBSERVATIONS.md`, `NOTES.md`, `docs/`), deduplicated and **re-verified against r3 `main`
-(`262a937` / 0.5.0)**. This is the **primary build input** for `skills/r3/` — it supersedes
-`R3-GOTCHAS.md` (pinned to the older `c968f42`) wherever they differ.
+The consolidated, deduplicated inventory of verified r3 behavior — mined from **all** the sources (the r3
+source + test suite, r3's own docs, the r3 tutorial, `RESEARCH_WORKFLOW.md`, and real committed jobs) and
+**re-verified against r3 `main` (`262a937` / 0.5.0)**. The **primary build input** for `skills/r3/`; it
+supersedes `R3-GOTCHAS.md` (pinned to the older `c968f42`) wherever they differ. (The section labels A–O
+are historical mining order, not a reading order.)
 
 **Legend:** `[P]` pure r3 (skill material) · `[H]` house (exclude from the pure skill) ·
 `[V]` verified against `main` source · `[?]` verify live during the build. Source refs are
