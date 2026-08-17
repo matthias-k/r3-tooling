@@ -6,9 +6,17 @@ description: Use when working with r3 jobs — authoring or reading an r3.yaml r
 # r3 — operating manual
 
 r3 stores computational jobs, their dependencies, and their outputs with provenance.
-This is a terse, task-indexed reference; deeper detail lives in the sibling files
-`reference/gotchas.md`, `reference/python-api.md`, `reference/query-grammar.md`, and
-`scripts/r3dev.py` — load them on demand. r3 is driven by a **CLI** (the lifecycle verbs)
+This is a terse, task-indexed reference; deeper detail lives in four sibling files — load one when its cue fires:
+
+- **`reference/query-grammar.md`** — the full query grammar. **Read it before writing any
+  non-tag query**: several operators return *silently wrong* results (e.g. `$ne` on a tag array
+  matches everything).
+- **`reference/gotchas.md`** — surprising behaviors and failure modes; skim before your first
+  commit / checkout / find.
+- **`reference/python-api.md`** — the `Repository`/`Job` API; needed to trace provenance,
+  reshape metadata, or build dependencies in code (which has a destination-first footgun).
+- **`scripts/r3dev.py`** — the bundled dev-checkout loop (see "Running & the lifecycle").
+ r3 is driven by a **CLI** (the lifecycle verbs)
 and a **Python API** (working over the job graph); the "CLI vs the Python API" section
 covers when to use which, and each command is introduced below where it's first used. You
 work against a **repository** — create one with `r3 init <path>` and point r3 at it via
@@ -224,8 +232,9 @@ long shows `uuid | timestamp | #tags`; lists all by default, `--latest` the newe
 For anything **beyond tags** — including **`path`** — use the query engine, via the Python
 API (`repo.find(query, latest)`) or inside a `find_latest`/`find_all` dependency. `r3 find`
 cannot search by path yet (`--path` is planned), so "find by path" means the API, or giving
-the job a tag you can search. The grammar is Mongo-style but a subset only — full grammar,
-array semantics, and the sharp gotchas → `reference/query-grammar.md`.
+the job a tag you can search. The grammar is Mongo-style but a **subset** only, with traps that **silently return the wrong
+jobs** (e.g. `$ne` on an array doesn't exclude; unknown operators are ignored) — **read
+`reference/query-grammar.md` before writing any non-trivial query.**
 
 After editing metadata by hand, run `r3 rebuild-index` to refresh the query index.
 
