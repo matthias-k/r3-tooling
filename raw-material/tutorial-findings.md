@@ -1,5 +1,10 @@
 # r3 tutorial — mined findings for the skill
 
+> **Build provenance — not user documentation.** This is the internal, verified inventory the r3 skill was
+> *authored from*; you do **not** need it to use the skill (see `skills/r3/`). It is dense working material,
+> kept so a future session can re-verify the skill against a newer r3. **To use r3, read the skill, not
+> this.**
+
 Consolidated from a 6-agent mining pass over the whole r3 tutorial (`playbook.qmd`, `DESIGN.md`,
 `R3-OBSERVATIONS.md`, `NOTES.md`, `docs/`), deduplicated and **re-verified against r3 `main`
 (`262a937` / 0.5.0)**. This is the **primary build input** for `skills/r3/` — it supersedes
