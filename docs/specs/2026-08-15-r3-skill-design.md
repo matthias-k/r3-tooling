@@ -38,52 +38,65 @@ Lifting the pure skill upstream is a directory move, not a disentangling exercis
 
 ## 3. Scope of the pure r3 skill
 
-Target **r3 `main`** (grows with main). **Remote-storage held out** (§11). Sections:
+Target **r3 `main`** (grows with main). **Remote-storage held out** (§11).
 
-1. **Mental model** — a job is a directory; `commit` freezes the *recipe* (code + resolved deps) by
-   content **hash for integrity** — the id itself is a fresh `uuid4`, *not* content-addressed (identical
-   recipes get different ids); a job is immutable after commit **except `metadata.yaml` and `output/`**;
-   provenance = dependencies frozen (git commit hashes, job uuids) at commit time. Key facts &
-   consequences the skill must make explicit:
-   - **r3 is not an execution engine.** Its only runtime touchpoint in a job is a single `r3 checkout`;
-     running is entirely your code — no runner/scheduler/`run.sh`/`commands:`. `run.sh` is a *user*
-     convention r3 never reads.
-   - **The job dir is a free-form container** — every non-ignored file freezes into the recipe (configs,
-     design docs, specs, notes), not just code.
-   - **`output/` is the one and only place results persist.** A job writes results *only* to
-     `output/`. In an in-place committed run, writing elsewhere hits the read-only dir
-     (`PermissionError`); in a checkout, non-`output/` writes land in throwaway scratch (next bullet).
-   - **A checkout workdir is throwaway scratch.** `r3 checkout` builds a disposable workdir; only its
-     `output/` symlink persists back to the store. That is a *feature*: write preprocessed data,
-     expanded configs, or scratch there with repo-relative paths — no temp-dir juggling — all gone when
-     the workdir is deleted. Dev twist (a common MK pattern): keep an **ignored `cache/`** (via
-     `ignore: [/cache]`) so repeated dev runs reuse a prepopulated cache and stay fast, while the
-     committed job — which excludes `cache/` — recomputes from scratch, keeping provenance honest.
-   - **Frozen deps ⇒ reorganize later without breakage.** metadata (paths, tags) is mutable and *not*
-     hashed, and committed deps freeze to uuids — so you can restructure your `path` namespace / re-tag
-     to fit how you think *now*; committed jobs keep resolving, only new jobs/queries see the new
-     layout (§7). This is a headline r3 property, worth stating plainly.
-2. **Surface strategy** (§4) — CLI-first for the lifecycle; the Python API as r3's general interface to
-   the provenance graph.
-3. **Lifecycle** — author a job (`run.py`; `r3.yaml`/`metadata.yaml` optional, synthesized) → `commit`
-   → run (**in-place** for a dependency-free job; **`r3 checkout <id> <workdir>`** — or an in-job
-   `run.sh` — once it has deps, to materialize them) → `find` → `checkout` → `remove` →
-   `rebuild-index` / `edit`. Distinct from committed-job checkout: the **dev-checkout** of an
-   *uncommitted* job (§4).
-4. **Dependencies + query grammar** — git deps (`repository`/`source`/`destination`, resolve→freeze to
-   a commit hash at commit), job deps (`find_latest`/`find_all`, `source` + `recursive_checkout`
-   materialization rules — symlink vs real copy), `ignore` (absolute patterns). The **complete,
-   verified** Mongo-style query grammar (§6); tags are privileged by tooling, arbitrary metadata is
-   queryable via the API.
-5. **Metadata & conventions** — `tags` (the one field r3 *tooling* privileges today) and **`path` as
-   the recommended organizing convention** (§7), plus `version`. metadata is mutable, **not
-   content-hashed**, and must be **JSON-representable**.
-6. **Non-obvious behaviors** — the agent-biting gotchas, drawn from `raw-material/tutorial-findings.md`
+**Structure the skill as a concept build-order, not a topic checklist.** Every concept is introduced
+before it is used, and **dependencies are foundational** — part of the core model *and* of authoring, not
+a mid-list topic. (The first build ordered by topic and leaned on "frozen deps" three sections before a
+dependency was defined; this list fixes that.) Validate the result with an **agent-as-cold-reader review**
+(§13): an agent that has never seen r3 reads — better, *tries to use* — the skill and flags anything used
+before it's introduced, or missing to actually do the task.
+
+**Sections (in reading order):**
+
+1. **The model — a job and its dependencies, frozen together.** A job is a directory of files you author.
+   A job may **depend** on other things: **git repositories** and the **outputs of other r3 jobs**.
+   `commit` freezes your files by content **hash for integrity** *and resolves each dependency to an exact
+   version* (a git commit hash / a job uuid), assigning a **fresh `uuid4` identity** (not
+   content-addressed — identical recipes get different ids). **That freezing is the provenance &
+   reproducibility guarantee:** a committed job is **immutable except `metadata.yaml` and `output/`**.
+   State the corollaries here, where they belong: **r3 is not an execution engine** (its only runtime
+   touchpoint is `r3 checkout`; running is your code; `run.sh` is a user convention, `commands:` inert);
+   the **job dir is free-form** (every non-ignored file freezes — configs, modules, notes — not just
+   code); **`output/` is the one place results persist**; and because metadata is mutable + not hashed and
+   deps pin uuids, you can **reorganize `path`/tags later without breaking committed jobs**.
+2. **Authoring a job.** Authoring is *implementing everything the job needs*: a **run file** (`run.py` /
+   `run.sh` are canonical names), usually **config** (e.g. `config.yaml`), and often **more** — extra
+   modules, whole sub-package directories, data-prep code — **plus declaring the job's dependencies** (git
+   deps and job deps via `find_latest`/`find_all` queries). Constructing the right dependency queries is
+   part of authoring, not an afterthought. `r3.yaml` (the recipe) and `metadata.yaml` are optional —
+   `commit` synthesizes them.
+3. **Dependencies in depth.** Git deps (`repository`/`destination`/`source?` + `branch?`/`tag?`/`commit?`;
+   **github.com-only**; resolve→freeze to a 40-hex commit at commit time). Job deps
+   (`find_latest`/`find_all`; materialization = **symlink vs recursive real copy**, decided by
+   `source`+`recursive_checkout`; `find_all` takes no `source`; **`source:` = scope, not duplication**).
+   The deprecated `query: '#tag'` string form (recognize it in old recipes). `ignore` (absolute,
+   exact-segment patterns; `/output` is auto-excluded regardless).
+4. **Running & the lifecycle.** In-place for a dependency-free job; **`r3 checkout <id> <workdir>`** to
+   materialize deps and run (the workdir is **throwaway scratch** — only `output/` persists — which
+   enables the ignored-`cache/` dev trick). **Dev-checkout** of an *uncommitted* job
+   (`repo.checkout(unresolved_dep, dir)` + `scripts/r3dev.py`; materializes only deps and **cannot change
+   what you commit**). **Update** an outdated job by **re-committing** (re-resolves each
+   `find_latest`/`find_all`). **Remove / reclaim** (`r3 remove` refuses if depended-on; delete a job's
+   `output/` to reclaim disk, noting it in `metadata.yaml`; `rm -rf` fails on the read-only dir).
+5. **Finding jobs & the query engine.** CLI `find` is **tag-only**; richer queries run through the API and
+   `find_latest`/`find_all` — the complete, verified Mongo-style grammar and its gotchas →
+   `reference/query-grammar.md`. Plus `rebuild-index` and `edit`.
+6. **Metadata & the `path` convention.** `metadata.yaml` is mutable, **not hashed**, and must be
+   **JSON-representable** (quote dates). `tags` is the one field tooling privileges today; **`path`** is
+   the recommended organizing convention (§7) — presented as **examples, not rules**; a `path` need not be
+   unique and is a **movable namespace**.
+7. **CLI vs the Python API (surface strategy, §4).** The CLI is the permission-bounded default for the
+   lifecycle verbs (allowlist `Bash(r3 …:*)`); the **Python API** is r3's general interface for *working
+   over the job graph* — reading *and* reshaping — framed open-endedly, with two named CLI-gaps
+   (rich-query, dev-checkout). **Demoted from its former #2 slot:** it's a tooling choice, introduced only
+   after the reader holds the concepts.
+8. **Non-obvious behaviors** — the agent-biting gotchas, drawn from `raw-material/tutorial-findings.md`
    (the verified mined inventory that supersedes `R3-GOTCHAS.md`) and §8, in a `reference/gotchas.md`
    loaded on demand. Highest-value live-on-main: unstable `find` order (no `ORDER BY` unless `--latest`;
    `rebuild-index` reshuffles); range ops match *all* rows on string fields (silent); github.com-only
    git deps; `rm -rf` fails on a committed job (`555`); a cosmetic `fatal:` on cold-cache commit.
-7. **The verify habit + a validity stamp.** r3 `main` moves, so the skill's standing instruction is
+9. **The verify habit + a validity stamp.** r3 `main` moves, so the skill's standing instruction is
    *confirm against live `r3 --help`/behavior/the source, not memory*, and it flags the version-sensitive
    areas. Concretely, **`SKILL.md` carries a validity stamp** — the r3 version + commit it was verified
    against (e.g. *Verified against r3 `262a937` / v0.5.0 on 2026-08-17*). That turns "re-verify" into a
@@ -91,7 +104,7 @@ Target **r3 `main`** (grows with main). **Remote-storage held out** (§11). Sect
    (CLI, query/`find`, checkout, path-promotion), to see what changed and plan a targeted update. Live
    example: MK intends to fix the unstable-`find`-order gotcha (add `ORDER BY`) — exactly the kind of
    change the stamp lets a future session catch and fold in.
-8. **Local tooling may supersede parts of this** (§5) — the neutral, shape-agnostic principle that lets
+10. **Local tooling may supersede parts of this** (§5) — the neutral, shape-agnostic principle that lets
    an environment's wrappers override, without the skill naming any.
 
 **Skill format:** one `SKILL.md` (YAML frontmatter: `name: r3`, a description that triggers on r3 job /
@@ -356,3 +369,8 @@ concerns MK's house tooling, not the skill's content.
    seed `reference/gotchas.md` from the findings doc's gotcha buckets (F, D, H) and bundle the bare
    dev-checkout script.
 3. Stub `extensions/` once house wrappers land on this machine — shape TBD (§5).
+4. **Validate structure with an agent-as-cold-reader review.** Give an agent with no r3 background *only*
+   the skill (`SKILL.md` + the `reference/` files) plus a realistic r3 task, and have it attempt the task,
+   reporting where the skill is confusing, uses a concept before introducing it, or lacks what's needed to
+   act. This is a **standing review dimension** (the audience is an agent), not a one-off — pair it with an
+   explicit *structure-design* step (design the concept build-order before writing).

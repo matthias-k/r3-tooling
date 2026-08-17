@@ -6,83 +6,57 @@ description: Use when working with r3 jobs — authoring or reading an r3.yaml r
 # r3 — operating manual
 
 r3 stores computational jobs, their dependencies, and their outputs with provenance.
-This is a terse, task-indexed reference; detail lives in the sibling files
+This is a terse, task-indexed reference; deeper detail lives in the sibling files
 `reference/gotchas.md`, `reference/python-api.md`, `reference/query-grammar.md`, and
-`scripts/r3dev.py`. Load them on demand.
+`scripts/r3dev.py` — load them on demand. r3 is driven by a **CLI** (the lifecycle verbs)
+and a **Python API** (working over the job graph); the "CLI vs the Python API" section
+covers when to use which, and each command is introduced below where it's first used.
 
 > **Verified against r3 `main` `262a937` / v0.5.0 on 2026-08-17.** r3 grows with `main` —
-> confirm claims against live `r3` before relying on a subtlety (see "Keep this current").
+> confirm claims against live `r3` before relying on a subtlety (see "Keep this current", below).
 
-## 1. What r3 is
+## 1. The model — a job and its dependencies
 
-- **A job is a directory.** `commit` freezes the *recipe* (code + resolved deps) and
-  records a content **hash for integrity** — but a job's **identity is a fresh `uuid4`,
-  not content-addressed**: two identical recipes get two different ids.
-- **Immutable after commit, except `metadata.yaml` and `output/`.** `output/` is the one
-  place results persist; writing anywhere else during an in-place run hits the read-only
-  job dir (`PermissionError`).
-- **r3 is not an execution engine.** Its only runtime touchpoint is `r3 checkout` —
-  running the job is entirely your own code. There is no runner or scheduler; `run.sh`
-  is a user convention and a `commands:` key is inert.
+- **A job is a directory of files you author.**
+- **A job may depend on other things** — **git repositories** and the **outputs of other
+  r3 jobs**. You declare these dependencies in the job (see "Authoring a job" and
+  "Dependencies", below).
+- **`commit` freezes the job.** It hashes your files (for integrity) *and* resolves each
+  dependency to an exact version — a git **commit hash**, or another job's **uuid** — and
+  records them in the recipe (`r3.yaml`). The job gets a **fresh `uuid4` identity** (not
+  content-addressed: two identical recipes get two different ids).
+- **That freezing is the provenance and reproducibility guarantee:** a committed job is
+  **immutable — except `metadata.yaml` and `output/`**.
+
+Corollaries, true throughout r3:
+
+- **r3 is not an execution engine.** Its only runtime touchpoint is `r3 checkout` — running
+  the job is entirely your own code. There is no runner or scheduler; `run.sh` is a user
+  convention and a `commands:` key is inert.
 - **The job dir is free-form.** Every non-ignored file freezes into the recipe — configs,
-  notes, design docs, specs — not just executable code.
-- **Provenance = frozen deps.** Dependencies pin to git commit hashes and job uuids at
-  commit time. Because metadata is mutable and *not* hashed and deps pin uuids, you can
-  reorganize your `path`/tags later without breaking any committed job.
+  modules, notes — not just executable code.
+- **`output/` is the one place results persist.** Writing anywhere else during an in-place
+  run hits the read-only job dir (`PermissionError`).
+- **You can reorganize later without breaking anything.** Because `metadata.yaml` is mutable
+  and *not* hashed, and dependencies pin to fixed uuids/commits, you can restructure your
+  `path`/tags whenever — committed jobs keep resolving; only new jobs see the new layout.
 
-## 2. CLI for the lifecycle, the Python API for graph work
+## 2. Authoring a job
 
-**Use the CLI for lifecycle verbs.** It is the permission-bounded default: allowlisting
-`Bash(r3 …:*)` grants a bounded, auditable verb set, whereas driving the API means
-granting arbitrary code execution.
+Authoring a job is **implementing everything it needs**, in the job directory:
 
-| Verb | Does |
-|------|------|
-| `r3 init <path>` | create a repository (the one verb with no `--repository`) |
-| `r3 commit <jobdir>` | freeze a job; prints the bare uuid |
-| `r3 checkout <id> <workdir>` | materialize a committed job into a fresh workdir |
-| `r3 remove <id>` | delete a job (refuses if another job depends on it) |
-| `r3 find [-t TAG]… [-l] [--latest]` | list jobs — **tag-only** |
-| `r3 rebuild-index` | rebuild the query index from the job files |
-| `r3 edit <id>` | open `$EDITOR` on `metadata.yaml`, then reindex |
+- a **run file** — `run.py` or `run.sh` are the canonical names;
+- usually **config** — e.g. a `config.yaml` (just another file r3 freezes);
+- often **more** — extra modules, whole sub-package directories, data-prep code;
+- and **declaring the job's dependencies** — git deps and job deps (via `find_latest` /
+  `find_all` queries). Constructing the right dependency queries is part of authoring, not
+  an afterthought (syntax under "Dependencies", below).
 
-Every verb but `init` reads the repository from `$R3_REPOSITORY` or `--repository`;
-`R3_REPOSITORY=""` counts as unset.
+`r3.yaml` (the recipe) and `metadata.yaml` are **optional** — `commit` synthesizes them (an
+empty `metadata.yaml`, and an `r3.yaml` recording the file hashes, resolved dependencies, and
+a timestamp).
 
-**The Python API is r3's general interface to the job graph — for reading *and* reshaping
-it**, not a fixed list of fallbacks. Reach for it whenever the task is working over the
-graph rather than running one lifecycle verb — e.g. *find every job, in any dependency
-order, that transitively uses repo X at commit Y*. Entry points are `r3.Repository(path)`
-and `r3.Job(dir)` → `reference/python-api.md`.
-
-Two things the CLI does not cover, that an environment's own tooling often does:
-
-- **Querying beyond tags.** CLI `find` matches tags only. For path, arbitrary metadata,
-  `$glob`, or ranges, use `repo.find(query, latest)` or `find_latest`/`find_all` deps. (A
-  JSON-query CLI option is planned upstream.)
-- **Dev checkout** — a CLI gap that local tooling fills; covered under Lifecycle and
-  `scripts/r3dev.py`.
-
-## 3. Lifecycle
-
-1. **Author.** Write `run.py` (or whatever runs). `r3.yaml` and `metadata.yaml` are
-   optional — commit synthesizes them.
-2. **Run.** A dependency-free job runs **in place** (`cd <jobdir> && python run.py`). Once
-   it has dependencies, `r3 checkout <id> <workdir>` first to materialize them. The workdir
-   is **throwaway scratch** (only its `output/` symlink persists, as above), and the target
-   must not already exist.
-3. **Dev checkout** (running an *uncommitted* job): r3 removed the CLI command for this on
-   purpose. The primitive is `repo.checkout(unresolved_dep, dir)`; `scripts/r3dev.py` is a
-   ~25-line reference loop. A dev checkout materializes only the deps (no `output/` symlink)
-   and **cannot change what you commit** — committing discards dev artifacts.
-4. **Update an outdated job:** re-commit the authored dir — commit re-resolves each
-   `find_latest`/`find_all` to the now-current match.
-5. **Remove / reclaim.** `r3 remove` refuses (nonzero exit) if any job depends on the
-   target. Reclaim disk by deleting a job's `output/` (record it in `metadata.yaml` so an
-   empty `output/` reads as intentional). `rm -rf` on a committed job fails (its dir is
-   read-only) — use `r3 remove`, or `chmod -R +w` first.
-
-## 4. Dependencies & queries
+## 3. Dependencies
 
 **Git dependency** — `{repository, destination, source?, branch?/tag?/commit?}`.
 **github.com only** (https or ssh). With no pin, it resolves to the remote's
@@ -111,23 +85,53 @@ tags, AND'd) is common in older jobs — recognize it; steer new jobs to
 `.gitignore` semantics. `output/` is excluded from every commit **unconditionally** anyway;
 use `ignore` for other non-output artifacts (caches, rendered files, `__pycache__`).
 
-**Query grammar (overview).** Mongo-style, a subset only — logical operators + implicit-AND,
-plus field conditions incl. `$glob`/`$elemMatch`; `find({})` = all. **Full grammar, array
-semantics, and the sharp gotchas → `reference/query-grammar.md`.**
+## 4. Running & the lifecycle
 
-## 5. Metadata & the `path` convention
+1. **Run a dependency-free job in place** — `cd <jobdir> && python run.py`.
+2. **A job with dependencies** — `r3 checkout <id> <workdir>` first, to materialize the
+   committed job and its deps into a fresh workdir, then run there. The workdir is
+   **throwaway scratch**: only its `output/` symlink persists back to the store, so you can
+   write preprocessed data / expanded configs / scratch there freely (repo-relative paths,
+   no temp-dir juggling) — it's gone when you delete the workdir. The target must not already
+   exist. (Dev trick: an **ignored `cache/`** in the job persists across dev runs for speed
+   while the committed job still recomputes from scratch, keeping provenance honest.)
+3. **Commit** — `r3 commit <jobdir>` freezes the job and prints its bare uuid.
+4. **Dev checkout** (running an *uncommitted* job): there is no CLI for this — r3 removed the
+   command on purpose (the right behavior varies per user). The primitive is
+   `repo.checkout(unresolved_dep, dir)`; `scripts/r3dev.py` is a ~25-line reference loop. A
+   dev checkout materializes only the deps (no `output/` symlink) and **cannot change what
+   you commit** — committing discards dev artifacts.
+5. **Update an outdated job** — re-commit the authored dir; `commit` re-resolves each
+   `find_latest`/`find_all` to the now-current match.
+6. **Remove / reclaim** — `r3 remove <id>` deletes a job but refuses (nonzero exit) if
+   another job depends on it. Reclaim disk by deleting a job's `output/` (record it in
+   `metadata.yaml` so an empty `output/` reads as intentional). `rm -rf` on a committed job
+   fails (its dir is read-only) — use `r3 remove`, or `chmod -R +w` first.
+
+## 5. Finding jobs & queries
+
+`r3 find [-t TAG]… [-l] [--latest]` lists jobs — **tag-only** (`-t` repeatable, AND'd; `-l`
+long shows `uuid | timestamp | #tags`; lists all by default, `--latest` the newest match).
+
+For anything **beyond tags** — path, arbitrary metadata, `$glob`, ranges — use the query
+engine, via the Python API (`repo.find(query, latest)`) or inside a `find_latest`/`find_all`
+dependency. The query grammar is Mongo-style but a subset only — full grammar, array
+semantics, and the sharp gotchas → `reference/query-grammar.md`.
+
+After editing metadata by hand, run `r3 rebuild-index` to refresh the query index.
+
+## 6. Metadata & the `path` convention
 
 `metadata.yaml` is **mutable, not hashed**, and must be **JSON-representable** — a bare YAML
-date raises `TypeError` at commit, so quote dates. Edit it via `r3 edit`, or edit the file
-and `r3 rebuild-index`.
+date raises `TypeError` at commit, so quote dates. Edit it via `r3 edit <id>` (opens
+`$EDITOR`, then reindexes) or edit the file and `r3 rebuild-index`.
 
 `tags` is the only metadata field r3's *tooling* privileges today (`find --tag`, `#tag`
 rendering in `find -l`).
 
 **`path` is the recommended organizing convention** — a virtual-filesystem path that
-`find_latest`/`find_all` build on. It is queryable like any other metadata field, but not
-yet surfaced by the CLI (`--path` / an `r3 ls` are planned). Treat these as examples, not
-rules:
+`find_latest`/`find_all` build on. It's queryable like any other metadata field, but not yet
+surfaced by the CLI (`--path` / an `r3 ls` are planned). Treat these as examples, not rules:
 
 - Flat (`kodak`) or nested (`datasets/kodak`, `my-project/experiments/pilot`).
 - A `path` **need not be unique** — a whole sweep can share one; `find_latest` picks the
@@ -136,7 +140,34 @@ rules:
 - Groups often prefix paths with a project name for global uniqueness — one option, not a
   mandate.
 
-## 6. Non-obvious behaviors
+## 7. CLI vs the Python API
+
+**Prefer the CLI for the lifecycle verbs.** It is the permission-bounded default: allowlisting
+`Bash(r3 …:*)` grants a bounded, auditable verb set, whereas driving the API means granting
+arbitrary code execution. The full verb set:
+
+| Verb | Does |
+|------|------|
+| `r3 init <path>` | create a repository (the one verb with no `--repository`) |
+| `r3 commit <jobdir>` | freeze a job; prints the bare uuid |
+| `r3 checkout <id> <workdir>` | materialize a committed job into a fresh workdir |
+| `r3 remove <id>` | delete a job (refuses if another job depends on it) |
+| `r3 find [-t TAG]… [-l] [--latest]` | list jobs — **tag-only** |
+| `r3 rebuild-index` | rebuild the query index from the job files |
+| `r3 edit <id>` | open `$EDITOR` on `metadata.yaml`, then reindex |
+
+Every verb but `init` reads the repository from `$R3_REPOSITORY` or `--repository`;
+`R3_REPOSITORY=""` counts as unset.
+
+**The Python API is r3's general interface to the job graph — for reading *and* reshaping
+it**, not just a fallback. Reach for it whenever the task is working over the graph rather
+than running one lifecycle verb — e.g. *find every job, in any dependency order, that
+transitively uses repo X at commit Y*. Two things the CLI does not cover that the API (or an
+environment's own tooling) does: **querying beyond tags** (see "Finding jobs & queries") and
+**dev checkout** (see "Running & the lifecycle").
+Entry points are `r3.Repository(path)` and `r3.Job(dir)` → `reference/python-api.md`.
+
+## 8. Non-obvious behaviors
 
 r3 has several agent-biting behaviors. **Before relying on a subtlety, read
 `reference/gotchas.md`.** The three that bite most:
@@ -147,14 +178,14 @@ r3 has several agent-biting behaviors. **Before relying on a subtlety, read
   dependency's parameters from a committed file, never from its checked-out metadata.
 - `output/` is the **only writable, persisted** location in a job.
 
-## 7. Local tooling may supersede parts of this
+## 9. Local tooling may supersede parts of this
 
 Vanilla r3 is the floor. Environments commonly wrap it — a richer `find`, a dev-checkout
-helper, a submit wrapper, a pre-commit convention checker, and so on. If the user or the
-repo indicates such tooling exists (a project CLI on `PATH`, a house skill, the repo's
+helper, a submit wrapper, a pre-commit convention checker, and so on. If the user or the repo
+indicates such tooling exists (a project CLI on `PATH`, a house skill, the repo's
 CLAUDE.md/README), prefer it for that operation over the raw CLI/API.
 
-## 8. Keep this current
+## 10. Keep this current
 
 r3 tracks `main`, which moves. **Confirm against live `r3 --help`, live behavior, or the
 source — not memory** — before relying on any version-sensitive detail.
