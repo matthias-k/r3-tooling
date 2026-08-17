@@ -10,7 +10,9 @@ This is a terse, task-indexed reference; deeper detail lives in the sibling file
 `reference/gotchas.md`, `reference/python-api.md`, `reference/query-grammar.md`, and
 `scripts/r3dev.py` — load them on demand. r3 is driven by a **CLI** (the lifecycle verbs)
 and a **Python API** (working over the job graph); the "CLI vs the Python API" section
-covers when to use which, and each command is introduced below where it's first used.
+covers when to use which, and each command is introduced below where it's first used. You
+work against a **repository** — create one with `r3 init <path>` and point r3 at it via
+`$R3_REPOSITORY` (or `--repository` per command).
 
 > **Verified against r3 `main` `262a937` / v0.5.0 on 2026-08-17.** r3 grows with `main` —
 > confirm claims against live `r3` before relying on a subtlety (see "Keep this current", below).
@@ -43,14 +45,23 @@ Corollaries, true throughout r3:
 
 ## 2. Authoring a job
 
-Authoring a job is **implementing everything it needs**, in the job directory:
+Authoring a job is **implementing whatever the job's purpose requires**, in the job directory:
 
-- a **run file** — `run.py` or `run.sh` are the canonical names;
+- usually a **run file** — `run.py` / `run.sh` are the canonical names — but **r3 doesn't
+  require one and doesn't care what a job *does***. Besides the common compute job (run →
+  write results to `output/`), a job can **provide** something to downstream jobs (e.g. serve
+  a model over a local API) or simply **hold** data.
 - usually **config** — e.g. a `config.yaml` (just another file r3 freezes);
 - often **more** — extra modules, whole sub-package directories, data-prep code;
 - and **declaring the job's dependencies** — git deps and job deps (via `find_latest` /
-  `find_all` queries). Constructing the right dependency queries is part of authoring, not
-  an afterthought (syntax under "Dependencies", below).
+  `find_all` queries). Constructing the right dependency queries is part of authoring, not an
+  afterthought (syntax under "Dependencies", below).
+
+**Making a git dependency importable is your job, not r3's** — r3 only materializes the
+repo's files at `destination`. Two ways: narrow `source:` to the package subdir so
+`destination` is directly importable, or check out the whole repo (the default) and add it
+to `PYTHONPATH` / `sys.path` in your run script — a whole-repo checkout also makes editing
+and upstreaming changes easier.
 
 `r3.yaml` (the recipe) and `metadata.yaml` are **optional** — `commit` synthesizes them (an
 empty `metadata.yaml`, and an `r3.yaml` recording the file hashes, resolved dependencies, and
@@ -85,42 +96,95 @@ tags, AND'd) is common in older jobs — recognize it; steer new jobs to
 `.gitignore` semantics. `output/` is excluded from every commit **unconditionally** anyway;
 use `ignore` for other non-output artifacts (caches, rendered files, `__pycache__`).
 
-## 4. Running & the lifecycle
+## 4. A worked example
 
-1. **Run a dependency-free job in place** — `cd <jobdir> && python run.py`.
-2. **A job with dependencies** — `r3 checkout <id> <workdir>` first, to materialize the
-   committed job and its deps into a fresh workdir, then run there. The workdir is
-   **throwaway scratch**: only its `output/` symlink persists back to the store, so you can
-   write preprocessed data / expanded configs / scratch there freely (repo-relative paths,
-   no temp-dir juggling) — it's gone when you delete the workdir. The target must not already
-   exist. (Dev trick: an **ignored `cache/`** in the job persists across dev runs for speed
-   while the committed job still recomputes from scratch, keeping provenance honest.)
-3. **Commit** — `r3 commit <jobdir>` freezes the job and prints its bare uuid.
-4. **Dev checkout** (running an *uncommitted* job): there is no CLI for this — r3 removed the
-   command on purpose (the right behavior varies per user). The primitive is
-   `repo.checkout(unresolved_dep, dir)`; `scripts/r3dev.py` is a ~25-line reference loop. A
-   dev checkout materializes only the deps (no `output/` symlink) and **cannot change what
-   you commit** — committing discards dev artifacts.
-5. **Update an outdated job** — re-commit the authored dir; `commit` re-resolves each
-   `find_latest`/`find_all` to the now-current match.
-6. **Remove / reclaim** — `r3 remove <id>` deletes a job but refuses (nonzero exit) if
-   another job depends on it. Reclaim disk by deleting a job's `output/` (record it in
-   `metadata.yaml` so an empty `output/` reads as intentional). `rm -rf` on a committed job
-   fails (its dir is read-only) — use `r3 remove`, or `chmod -R +w` first.
+Authoring `mnist-eval`: it uses a library from github, depends on an existing dataset job
+(found by its `path`), runs, and gets committed.
 
-## 5. Finding jobs & queries
+**Files in the job dir.** `r3.yaml` (the recipe):
+
+```yaml
+dependencies:
+  - repository: https://github.com/example/toolbox   # whole repo → ./toolbox
+    destination: toolbox
+  - find_latest: { path: datasets/mnist }            # newest dataset job at that path
+    source: output                                   #   its output/ → ./data
+    destination: data
+```
+
+`metadata.yaml` (so you can find it later — see "Metadata & the `path` convention"):
+
+```yaml
+path: experiments/mnist-eval
+tags: [mnist, eval]
+```
+
+`run.py` reads `data/…`, imports the library (make it importable — see "Authoring a job"),
+and writes results to `output/`.
+
+**The flow:**
+
+```bash
+export R3_REPOSITORY=/path/to/repo          # or pass --repository each time
+
+# 1. Develop: materialize the deps in place and test-run (dev output is throwaway).
+python scripts/r3dev.py checkout mnist-eval
+cd mnist-eval && python run.py              # writes a local output/ you can inspect
+cd .. && python scripts/r3dev.py cleanup mnist-eval
+
+# 2. Commit: freezes the recipe + resolves the deps; prints the job's uuid.
+r3 commit mnist-eval                        # → a1b2c3…
+
+# 3. Persisted results come from running the COMMITTED job via a checkout.
+r3 checkout a1b2c3… /tmp/wd && cd /tmp/wd && python run.py
+#   results now live in the store at <repo>/jobs/a1b2c3…/output/ (via the output/ symlink)
+
+# 4. Find it again (find is tag-only; by path needs the Python API):
+r3 find -t mnist -l
+python -c "import r3; print(r3.Repository('$R3_REPOSITORY').find({'path':'experiments/mnist-eval'}))"
+```
+
+**What this shows:** a dev run's `output/` is **throwaway** — persisted results come from
+running the **committed** job's checkout (step 3). You may `commit` with the dev deps still
+materialized (`commit` ignores dependency destinations); `cleanup` is hygiene, and how you
+re-resolve a moved upstream.
+
+## 5. Running & the lifecycle (the details)
+
+- **Run a dependency-free job in place** — `cd <jobdir> && python run.py`.
+- **A job with dependencies** — `r3 checkout <id> <workdir>` first, to materialize the
+  committed job and its deps into a fresh workdir, then run there. The workdir is **throwaway
+  scratch**: only its `output/` symlink persists back to the store, so you can write
+  preprocessed data / expanded configs / scratch there freely (repo-relative paths, no
+  temp-dir juggling) — gone when you delete the workdir; the target must not already exist.
+  (Dev trick: an **ignored `cache/`** in the job persists across dev runs for speed while the
+  committed job still recomputes from scratch.)
+- **Dev checkout** (running an *uncommitted* job): there is no CLI for this — r3 removed the
+  command on purpose (the right behavior varies per user). The primitive is
+  `repo.checkout(unresolved_dep, dir)`; `scripts/r3dev.py` is the ~25-line reference loop
+  (`python scripts/r3dev.py checkout|cleanup <jobdir>`). A dev checkout materializes only the
+  deps (no `output/` symlink) and **cannot change what you commit**.
+- **Update an outdated job** — re-commit the authored dir; `commit` re-resolves each
+  `find_latest`/`find_all` to the now-current match.
+- **Remove / reclaim** — `r3 remove <id>` deletes a job but refuses (nonzero exit) if another
+  job depends on it. Reclaim disk by deleting a job's `output/` (record it in `metadata.yaml`
+  so an empty `output/` reads as intentional). `rm -rf` on a committed job fails (its dir is
+  read-only) — use `r3 remove`, or `chmod -R +w` first.
+
+## 6. Finding jobs & queries
 
 `r3 find [-t TAG]… [-l] [--latest]` lists jobs — **tag-only** (`-t` repeatable, AND'd; `-l`
 long shows `uuid | timestamp | #tags`; lists all by default, `--latest` the newest match).
 
-For anything **beyond tags** — path, arbitrary metadata, `$glob`, ranges — use the query
-engine, via the Python API (`repo.find(query, latest)`) or inside a `find_latest`/`find_all`
-dependency. The query grammar is Mongo-style but a subset only — full grammar, array
-semantics, and the sharp gotchas → `reference/query-grammar.md`.
+For anything **beyond tags** — including **`path`** — use the query engine, via the Python
+API (`repo.find(query, latest)`) or inside a `find_latest`/`find_all` dependency. `r3 find`
+cannot search by path yet (`--path` is planned), so "find by path" means the API, or giving
+the job a tag you can search. The grammar is Mongo-style but a subset only — full grammar,
+array semantics, and the sharp gotchas → `reference/query-grammar.md`.
 
 After editing metadata by hand, run `r3 rebuild-index` to refresh the query index.
 
-## 6. Metadata & the `path` convention
+## 7. Metadata & the `path` convention
 
 `metadata.yaml` is **mutable, not hashed**, and must be **JSON-representable** — a bare YAML
 date raises `TypeError` at commit, so quote dates. Edit it via `r3 edit <id>` (opens
@@ -140,7 +204,7 @@ surfaced by the CLI (`--path` / an `r3 ls` are planned). Treat these as examples
 - Groups often prefix paths with a project name for global uniqueness — one option, not a
   mandate.
 
-## 7. CLI vs the Python API
+## 8. CLI vs the Python API
 
 **Prefer the CLI for the lifecycle verbs.** It is the permission-bounded default: allowlisting
 `Bash(r3 …:*)` grants a bounded, auditable verb set, whereas driving the API means granting
@@ -164,10 +228,10 @@ it**, not just a fallback. Reach for it whenever the task is working over the gr
 than running one lifecycle verb — e.g. *find every job, in any dependency order, that
 transitively uses repo X at commit Y*. Two things the CLI does not cover that the API (or an
 environment's own tooling) does: **querying beyond tags** (see "Finding jobs & queries") and
-**dev checkout** (see "Running & the lifecycle").
-Entry points are `r3.Repository(path)` and `r3.Job(dir)` → `reference/python-api.md`.
+**dev checkout** (see "Running & the lifecycle"). Entry points are `r3.Repository(path)` and
+`r3.Job(dir)` → `reference/python-api.md`.
 
-## 8. Non-obvious behaviors
+## 9. Non-obvious behaviors
 
 r3 has several agent-biting behaviors. **Before relying on a subtlety, read
 `reference/gotchas.md`.** The three that bite most:
@@ -178,14 +242,14 @@ r3 has several agent-biting behaviors. **Before relying on a subtlety, read
   dependency's parameters from a committed file, never from its checked-out metadata.
 - `output/` is the **only writable, persisted** location in a job.
 
-## 9. Local tooling may supersede parts of this
+## 10. Local tooling may supersede parts of this
 
 Vanilla r3 is the floor. Environments commonly wrap it — a richer `find`, a dev-checkout
 helper, a submit wrapper, a pre-commit convention checker, and so on. If the user or the repo
 indicates such tooling exists (a project CLI on `PATH`, a house skill, the repo's
 CLAUDE.md/README), prefer it for that operation over the raw CLI/API.
 
-## 10. Keep this current
+## 11. Keep this current
 
 r3 tracks `main`, which moves. **Confirm against live `r3 --help`, live behavior, or the
 source — not memory** — before relying on any version-sensitive detail.
