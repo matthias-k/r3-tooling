@@ -118,7 +118,9 @@ Consolidated from a 6-agent mining pass over the whole r3 tutorial (`playbook.qm
 
 - `[P][V]` Primitive: `repo.checkout(unresolved_dep, dir)` resolves, then materializes. The loop (`r3dev.py`,
   ~25 lines, public API): `for dep in r3.Job(d).dependencies: repo.checkout(dep, d)` (guarding existing);
-  cleanup removes dep destinations + `output/` + `__pycache__/`.
+  cleanup removes each dep **destination** (reversing the checkout). **Correction:** the *bare* r3dev
+  cleanup touches only dep destinations — it does NOT remove `output/`/`__pycache__`; that is a
+  richer-wrapper add-on (e.g. xr3's `dev-cleanup`), not part of the vanilla loop.
 - `[P][V]` A dev checkout creates **no `output/` symlink** (an uncommitted job has no store slot; dev output is
   a throwaway local `output/`). **Committing after a dev run discards all dev artifacts**: the stored job has
   no materialized deps and a fresh empty `output/` — "a dev checkout cannot change what you commit" (because

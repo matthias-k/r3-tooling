@@ -105,15 +105,15 @@ def cleanup(repo, job_dir):
             os.unlink(dest)
         elif os.path.isdir(dest):
             shutil.rmtree(dest)            # DESTRUCTIVE — see the checkout gotchas
-    shutil.rmtree(os.path.join(job_dir, "output"), ignore_errors=True)
-    shutil.rmtree(os.path.join(job_dir, "__pycache__"), ignore_errors=True)
 ```
 
-A dev checkout creates **no `output/` symlink** (an uncommitted job has no store slot), and
-committing afterwards discards the materialized deps and dev `output/`. `cleanup` `rmtree`s
-dependency directories with no guard, so it can destroy uncommitted work you edited inside a
-checked-out git dep — check a git dep's `git status` before cleaning. See the checkout
-section of `gotchas.md`.
+`cleanup` reverses the checkout by removing only the **dependency destinations**; the bare
+loop does **not** clean the job's own `output/` or `__pycache__/` (a richer wrapper in your
+environment may). A dev checkout creates **no `output/` symlink** (an uncommitted job has no
+store slot), and committing afterwards discards the materialized deps and dev `output/`
+regardless. `cleanup` `rmtree`s dependency directories with no guard, so it can destroy
+uncommitted work you edited inside a checked-out git dep — check a git dep's `git status`
+before cleaning. See the checkout section of `gotchas.md`.
 
 ## Working over the graph
 
