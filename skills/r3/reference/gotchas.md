@@ -84,6 +84,3 @@ Query-operator traps live in `query-grammar.md`, not here.
   so a value JSON cannot encode — most commonly a **bare (unquoted) YAML date**, which parses
   to a `date` object — raises `TypeError` at commit. **Quote dates** (and any other
   non-JSON scalar) so they store as strings.
-- **A `commands:` key is inert.** r3 is not an execution engine and reads no `commands:` (or
-  any run-instruction) key from a recipe. Running the job is entirely your own code; a
-  `commands:` block, if present, is ignored.

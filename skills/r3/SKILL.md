@@ -21,13 +21,18 @@ work against a **repository** — create one with `r3 init <path>` and point r3 
 
 - **A job is an *isolated* directory** — self-contained, with everything it needs available
   locally. The intended model is that a job's code references **nothing outside its own
-  directory**. (r3 doesn't enforce this; reaching outside sometimes makes sense, but it costs
-  provenance — the reach isn't recorded or frozen.)
-- **Dependencies keep a job self-contained without duplicating everything.** A dependency
+  directory** — because that isolation is what lets a committed job be an exact, reproducible
+  record (its **provenance**). (r3 doesn't enforce it; reaching outside sometimes makes sense,
+  at the cost of provenance — the reach isn't recorded or frozen.)
+- **Dependencies keep a job self-contained — and are what give it provenance.** A dependency
   declares something that lives elsewhere — a **git repository**, or the **output of another
-  r3 job** — and makes it **available locally inside the job**. That's how a job uses a shared
-  library or an upstream dataset while staying a self-contained unit. You declare dependencies
-  in the job (see "Authoring a job" and "Dependencies", below).
+  r3 job** — and makes it **available locally** in the job (a shared library, an upstream
+  dataset) without duplicating it. At `commit` each is **resolved and frozen to an exact
+  version** (a git commit hash / an upstream job's uuid), so the dependencies *are* the record
+  of what the job was built on. A committed job's dependencies are thus **always resolved**; an
+  *unresolved* one (a loose `find_latest` query, an unpinned git ref) exists only in a working
+  directory, before commit. You declare dependencies in the job (see "Authoring a job" and
+  "Dependencies", below).
 - **`checkout` is the procedure that realizes this.** From the frozen recipe it assembles a
   runnable, fully-local job, materializing each dependency in place — without needless copying
   (shared data is symlinked, not duplicated). Checkout is r3's only runtime touchpoint;
@@ -42,8 +47,8 @@ work against a **repository** — create one with `r3 init <path>` and point r3 
 
 Corollaries, true throughout r3:
 
-- **r3 is not an execution engine.** There is no runner or scheduler; `run.sh` is a user
-  convention and a `commands:` key is inert.
+- **r3 is not an execution engine.** There is no runner, scheduler, or "run this" field in
+  the recipe — r3 never runs your job; `run.sh` is just a user convention.
 - **The job dir is free-form.** Every non-ignored file freezes into the recipe — configs,
   modules, notes — not just executable code.
 - **`output/` is the one place results persist.** Writing anywhere else during an in-place

@@ -60,7 +60,8 @@ before it's introduced, or missing to actually do the task.
    content-addressed — identical recipes get different ids). **That freezing is the provenance &
    reproducibility guarantee:** a committed job is **immutable except `metadata.yaml` and `output/`**.
    State the corollaries here, where they belong: **r3 is not an execution engine** (its only runtime
-   touchpoint is `r3 checkout`; running is your code; `run.sh` is a user convention, `commands:` inert);
+   touchpoint is `r3 checkout`; running is your code; `run.sh` is a user convention, and r3 reads no
+   run-command field);
    the **job dir is free-form** (every non-ignored file freezes — configs, modules, notes — not just
    code); **`output/` is the one place results persist**; and because metadata is mutable + not hashed and
    deps pin uuids, you can **reorganize `path`/tags later without breaking committed jobs**.
@@ -307,7 +308,8 @@ session must use these, not the pinned gotchas:
     analysis must read parameters from a **committed file** (`config.yaml`), **never** from a
     checked-out dependency's metadata (e.g. after `find_all`). Surprising; surface it prominently.
 - **No `commands:` field** (confirmed): vanilla r3 reads no `commands:` key; the `commands: run:` in
-  `../r3/docs/tutorial.md:37` is an upstream doc leftover. The skill states `commands:` is inert.
+  `../r3/docs/tutorial.md:37` is an upstream doc leftover. The skill **omits `commands:` entirely** (a
+  non-feature not worth naming); the doc leftover is logged in `docs/r3-upstream-doc-issues.md`.
 
 ## 9. Sources & locations (absolute paths)
 
