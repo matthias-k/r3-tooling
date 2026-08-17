@@ -17,23 +17,32 @@ work against a **repository** — create one with `r3 init <path>` and point r3 
 > **Verified against r3 `main` `262a937` / v0.5.0 on 2026-08-17.** r3 grows with `main` —
 > confirm claims against live `r3` before relying on a subtlety (see "Keep this current", below).
 
-## 1. The model — a job and its dependencies
+## 1. The model — a job is a self-contained directory
 
-- **A job is a directory of files you author.**
-- **A job may depend on other things** — **git repositories** and the **outputs of other
-  r3 jobs**. You declare these dependencies in the job (see "Authoring a job" and
-  "Dependencies", below).
+- **A job is an *isolated* directory** — self-contained, with everything it needs available
+  locally. The intended model is that a job's code references **nothing outside its own
+  directory**. (r3 doesn't enforce this; reaching outside sometimes makes sense, but it costs
+  provenance — the reach isn't recorded or frozen.)
+- **Dependencies keep a job self-contained without duplicating everything.** A dependency
+  declares something that lives elsewhere — a **git repository**, or the **output of another
+  r3 job** — and makes it **available locally inside the job**. That's how a job uses a shared
+  library or an upstream dataset while staying a self-contained unit. You declare dependencies
+  in the job (see "Authoring a job" and "Dependencies", below).
+- **`checkout` is the procedure that realizes this.** From the frozen recipe it assembles a
+  runnable, fully-local job, materializing each dependency in place — without needless copying
+  (shared data is symlinked, not duplicated). Checkout is r3's only runtime touchpoint;
+  running the assembled job is then your own code.
 - **`commit` freezes the job.** It hashes your files (for integrity) *and* resolves each
   dependency to an exact version — a git **commit hash**, or another job's **uuid** — and
   records them in the recipe (`r3.yaml`). The job gets a **fresh `uuid4` identity** (not
   content-addressed: two identical recipes get two different ids).
-- **That freezing is the provenance and reproducibility guarantee:** a committed job is
-  **immutable — except `metadata.yaml` and `output/`**.
+- **That freezing is the provenance and reproducibility guarantee:** a committed job is a
+  self-contained, immutable record of exactly what produced its results — **immutable except
+  `metadata.yaml` and `output/`**.
 
 Corollaries, true throughout r3:
 
-- **r3 is not an execution engine.** Its only runtime touchpoint is `r3 checkout` — running
-  the job is entirely your own code. There is no runner or scheduler; `run.sh` is a user
+- **r3 is not an execution engine.** There is no runner or scheduler; `run.sh` is a user
   convention and a `commands:` key is inert.
 - **The job dir is free-form.** Every non-ignored file freezes into the recipe — configs,
   modules, notes — not just executable code.

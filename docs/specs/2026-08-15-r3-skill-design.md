@@ -49,8 +49,12 @@ before it's introduced, or missing to actually do the task.
 
 **Sections (in reading order):**
 
-1. **The model — a job and its dependencies, frozen together.** A job is a directory of files you author.
-   A job may **depend** on other things: **git repositories** and the **outputs of other r3 jobs**.
+1. **The model — a job is a self-contained directory.** A job is an *isolated* directory with everything
+   it needs available locally; the model is that its code references nothing outside itself (r3 doesn't
+   enforce this, but reaching out costs provenance). **Dependencies** keep it self-contained without
+   duplicating — they declare things that live elsewhere (**git repositories**, the **outputs of other r3
+   jobs**) and make them available *locally* in the job; **`checkout`** is the procedure that assembles the
+   runnable, fully-local job (materializing deps without needless copying — shared data is symlinked).
    `commit` freezes your files by content **hash for integrity** *and resolves each dependency to an exact
    version* (a git commit hash / a job uuid), assigning a **fresh `uuid4` identity** (not
    content-addressed — identical recipes get different ids). **That freezing is the provenance &
