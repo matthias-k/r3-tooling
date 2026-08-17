@@ -54,9 +54,10 @@ A checkout (including `r3 checkout` and any recursive-copy dependency) **omits t
 and `r3.yaml`** — verified against r3 `main` (`storage.checkout_job`). So a downstream job that fans in
 upstreams (`find_all`) and wants their **hyperparameters** *cannot* read them from `task_meta` /
 `gridsearch_meta` in the checked-out dep's `metadata.yaml` — that file isn't there. **House implication:**
-any parameter a downstream consumer must read should live in a **committed regular file** (e.g.
-`config.yaml`), not only in `metadata.yaml`. Worth a one-line warning in the doc, since the house habit is
-to put params in `task_meta`.
+keep such parameters in **both** places — `task_meta` (for *querying*, which is the whole point of params
+in metadata) **and** a **committed regular file** (e.g. `config.yaml`, so a downstream consumer can read
+them back across a checkout). Worth a one-line warning in the doc, since the house habit is to put params
+in `task_meta` alone.
 
 ## 4. `run.sh` → `run_inner.sh` + SLURM/Singularity structure  **[CHECK]**
 

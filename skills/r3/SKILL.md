@@ -177,7 +177,9 @@ python -c "import r3; print(r3.Repository('$R3_REPOSITORY').find({'path':'experi
 **What this shows:** a dev run's `output/` is **throwaway** — persisted results come from
 running the **committed** job's checkout (step 3). You may `commit` with the dev deps still
 materialized (`commit` ignores dependency destinations); `cleanup` is hygiene, and how you
-re-resolve a moved upstream.
+re-resolve a moved upstream. The dev step (1) is **optional** — skip it for simple or
+auto-generated jobs; for expensive jobs, smoke-test with reduced parameters rather than a full
+run.
 
 ## 5. Running & the lifecycle (the details)
 
@@ -193,7 +195,11 @@ re-resolve a moved upstream.
   command on purpose (the right behavior varies per user). The primitive is
   `repo.checkout(unresolved_dep, dir)`; `scripts/r3dev.py` is the ~25-line reference loop
   (`python scripts/r3dev.py checkout|cleanup <jobdir>`). A dev checkout materializes only the
-  deps (no `output/` symlink) and **cannot change what you commit**.
+  deps (no `output/` symlink) and **cannot change what you commit**. **It's optional** —
+  authoring and `commit`-ing directly is fine (and usual for auto-generated jobs); when you do
+  dev-run, it's typically a **smoke test** (shrink the hyperparameters/inputs), not the full
+  job — re-running an expensive run just to test it is wasteful, and the committed job produces
+  the real results anyway.
 - **Update an outdated job** — re-commit the authored dir; `commit` re-resolves each
   `find_latest`/`find_all` to the now-current match.
 - **Remove / reclaim** — `r3 remove <id>` deletes a job but refuses (nonzero exit) if another
@@ -277,7 +283,8 @@ r3 has several agent-biting behaviors. **Before relying on a subtlety, read
   timeline.
 - A **checkout omits `r3.yaml`/`metadata.yaml`** — the job's own *and* a recursively-copied
   dependency's — so a running job can't read its own metadata; keep runtime parameters in a
-  committed file (e.g. `config.yaml`), never in `metadata.yaml`.
+  committed file (e.g. `config.yaml`), not *only* in `metadata.yaml` (a checkout can't read it
+  back — though keeping them in metadata *too* is what lets you query jobs by seed/variant).
 - `output/` is the **only writable, persisted** location in a job.
 
 ## 10. Local tooling may supersede parts of this

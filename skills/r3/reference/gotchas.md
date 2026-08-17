@@ -37,9 +37,10 @@ Query-operator traps live in `query-grammar.md`, not here.
   file still matches commit time. **Consequence (do not miss it):** a **running job cannot
   read its own `metadata.yaml`/`r3.yaml`** from the workdir, and a downstream analysis cannot
   read a dependency's — so keep any parameter you need at runtime (hyperparameters, seeds,
-  labels) in a **committed regular file** (e.g. `config.yaml`), never in `metadata.yaml`. After
-  a `find_all` fan-in especially, don't pull each upstream's params from its metadata — that
-  file isn't there. (A non-recursive whole-job *symlink* does expose `metadata.yaml` through
+  labels) in a **committed regular file** (e.g. `config.yaml`), **not *only* in `metadata.yaml`**
+  — a checkout can't read metadata back, though keeping params in metadata *as well* is worthwhile:
+  it's what lets you `find`/query jobs by seed, variant, etc. After a `find_all` fan-in especially,
+  don't pull each upstream's params from its metadata — that file isn't there. (A non-recursive whole-job *symlink* does expose `metadata.yaml` through
   the link, but don't rely on it either, for the same mutability reason.)
 - **The checkout primitive does not cleanly handle a pre-existing destination.** A job-dep
   symlink errors if its destination already exists; a git dep's move **nests** the tree
