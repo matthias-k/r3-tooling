@@ -23,7 +23,7 @@ This is a terse, task-indexed reference; detail lives in the sibling files
   job dir (`PermissionError`).
 - **r3 is not an execution engine.** Its only runtime touchpoint is `r3 checkout` —
   running the job is entirely your own code. There is no runner or scheduler; `run.sh`
-  and a `commands:` key are not r3 concepts (a `commands:` key is inert).
+  is a user convention and a `commands:` key is inert.
 - **The job dir is free-form.** Every non-ignored file freezes into the recipe — configs,
   notes, design docs, specs — not just executable code.
 - **Provenance = frozen deps.** Dependencies pin to git commit hashes and job uuids at
@@ -52,17 +52,16 @@ Every verb but `init` reads the repository from `$R3_REPOSITORY` or `--repositor
 **The Python API is r3's general interface to the job graph — for reading *and* reshaping
 it**, not a fixed list of fallbacks. Reach for it whenever the task is working over the
 graph rather than running one lifecycle verb — e.g. *find every job, in any dependency
-order, that transitively uses repo X at commit Y*. Entry points: `r3.Repository(path)`
-(`find`, `checkout`, `commit`, `remove`, `find_dependents`, `jobs`, `repo[id]`) and
-`r3.Job(dir)`. Details → `reference/python-api.md`.
+order, that transitively uses repo X at commit Y*. Entry points are `r3.Repository(path)`
+and `r3.Job(dir)` → `reference/python-api.md`.
 
 Two things the CLI does not cover, that an environment's own tooling often does:
 
 - **Querying beyond tags.** CLI `find` matches tags only. For path, arbitrary metadata,
   `$glob`, or ranges, use `repo.find(query, latest)` or `find_latest`/`find_all` deps. (A
   JSON-query CLI option is planned upstream.)
-- **Dev checkout** — running a job *before* committing it. Deliberately user-owned; see the
-  lifecycle below and `scripts/r3dev.py`.
+- **Dev checkout** — a CLI gap that local tooling fills; covered under Lifecycle and
+  `scripts/r3dev.py`.
 
 ## 3. Lifecycle
 
@@ -70,8 +69,8 @@ Two things the CLI does not cover, that an environment's own tooling often does:
    optional — commit synthesizes them.
 2. **Run.** A dependency-free job runs **in place** (`cd <jobdir> && python run.py`). Once
    it has dependencies, `r3 checkout <id> <workdir>` first to materialize them. The workdir
-   is **throwaway scratch** — only its `output/` symlink persists back to the store, and the
-   target must not already exist.
+   is **throwaway scratch** (only its `output/` symlink persists, as above), and the target
+   must not already exist.
 3. **Dev checkout** (running an *uncommitted* job): r3 removed the CLI command for this on
    purpose. The primitive is `repo.checkout(unresolved_dep, dir)`; `scripts/r3dev.py` is a
    ~25-line reference loop. A dev checkout materializes only the deps (no `output/` symlink)
@@ -87,8 +86,9 @@ Two things the CLI does not cover, that an environment's own tooling often does:
 
 **Git dependency** — `{repository, destination, source?, branch?/tag?/commit?}`.
 **github.com only** (https or ssh). With no pin, it resolves to the remote's
-**default-branch HEAD** at commit and freezes the 40-hex `commit:` (a `branch:`/`tag:` does
-not round-trip). Cached as a bare clone under `<repo>/git/github.com/<owner>/<name>`.
+**default-branch HEAD** at commit and freezes the 40-hex `commit:` — a `branch:`/`tag:` is
+frozen to the resolved commit, not preserved as a branch/tag. Cached as a bare clone under
+`<repo>/git/github.com/<owner>/<name>`.
 
 **Job dependency** — `{find_latest|find_all: <query>, destination, source?,
 recursive_checkout?}`. Resolves at commit and keeps **both** the loose query and the
@@ -103,17 +103,15 @@ So `source:` selects **scope, not duplication**.
 
 **Reading old recipes:** the deprecated string form `query: '#tag #tag'` (space-separated
 tags, AND'd) is common in older jobs — recognize it; steer new jobs to
-`find_latest`/`find_all`. Dependency constructors in the API are **destination-first** (see
-`reference/python-api.md`).
+`find_latest`/`find_all`.
 
 **`ignore`** — absolute, exact-segment patterns only (`/output`, `/cache`); no globs, no
 `.gitignore` semantics. `output/` is excluded from every commit **unconditionally** anyway;
 use `ignore` for other non-output artifacts (caches, rendered files, `__pycache__`).
 
-**Query grammar (overview).** Mongo-style, but only a subset: logical `$and`/`$or`/`$not`/
-`$nor` plus implicit-AND (multi-key dict); field conditions `$eq` (implicit) `/$ne/$in/
-$nin/$gt/$gte/$lt/$lte/$glob/$all/$elemMatch`; `find({})` matches all. The **full grammar,
-array semantics, and the sharp gotchas → `reference/query-grammar.md`.**
+**Query grammar (overview).** Mongo-style, a subset only — logical operators + implicit-AND,
+plus field conditions incl. `$glob`/`$elemMatch`; `find({})` = all. **Full grammar, array
+semantics, and the sharp gotchas → `reference/query-grammar.md`.**
 
 ## 5. Metadata & the `path` convention
 
