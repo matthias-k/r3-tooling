@@ -46,7 +46,13 @@ include archetypes worth naming — **a job need not have a classical run file**
   `find_latest: {path: research/containers/default}, source: output/container.sif`. *(The doc mentions
   "cut a container revision"; the "container is an r3 job you depend on" mechanic may be worth making
   explicit.)* **[CHECK]**
-- **Data / holding jobs** — a job whose purpose is just to hold a dataset in `output/` for others.
+- **Source / entry-node jobs (`_raw`, `src`)** — for non-public datasets and prior-work models, a minimal
+  job (a `README.md` documenting the data's origin + `metadata.yaml`, **no run file**) is committed and its
+  `output/` **hand-populated** with the external data, introducing it into the provenance graph as a
+  labeled **entry node** that downstream jobs depend on. Real examples: `datasets/MIT300_raw`,
+  `datasets/CAT2000_raw`, `…/local_global_attention_model/src` (the README carries the human provenance,
+  e.g. "raw data received from X, manually copied to output"). Worth standardizing as *the* documented way
+  to depend on un-provenanced external data until r3 has a first-class option — you flagged exactly this.
 
 ## 3. ⚠ Correctness hazard: downstream can't read a dependency's `metadata.yaml`  **[NEW? — important]**
 

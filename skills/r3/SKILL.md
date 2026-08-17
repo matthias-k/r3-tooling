@@ -81,6 +81,15 @@ and upstreaming changes easier.
 empty `metadata.yaml`, and an `r3.yaml` recording the file hashes, resolved dependencies, and
 a timestamp).
 
+**Bringing external data into the graph (an entry-node job).** To depend on something that
+isn't an r3 job's output — a downloaded dataset, prior-work weights — wrap it as a **source
+job**: a minimal job with no dependencies (often just a `README.md` documenting where the data
+came from), `commit` it, then **hand-copy the data into the committed job's `output/`** (which
+stays writable — `output/` is never frozen by commit anyway). It's now a dependable **entry
+node**: downstream jobs pin it by `path`/tag like any other. Its data isn't reproducible from
+the recipe (you placed it by hand), so the README *is* its provenance — the current idiom for
+un-provenanced external inputs.
+
 ## 3. Dependencies
 
 **Git dependency** — `{repository, destination, source?, branch?/tag?/commit?}`.
