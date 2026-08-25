@@ -1,0 +1,92 @@
+#!/home/bethge/mkuemmerer31/miniconda3/bin/python
+
+import pathlib
+import sys
+from datetime import datetime
+from time import sleep
+
+import click
+from executor import execute
+
+
+def get_job_state(job_id: str):
+    output = execute(f'squeue --jobs={job_id} --noheader --format="%T"', capture=True)
+    output = output.strip()
+    if output == 'RUNNING':
+        detailed_output = execute(f'sacct -j {job_id} -P', capture=True)
+        lines = detailed_output.strip().split()
+        lines = [line.split('|') for line in lines]
+        last_line = lines[-1]
+        step_id = last_line[0]
+        if not '.' in step_id:
+            step_no = None
+        else:
+            try:
+                step_no = int(step_id.split('.', 1)[1])
+            except ValueError:
+               step_no = None
+        return f"{output}.{step_no}"        
+    return output
+
+
+def get_job_id(job_name: str):
+    # sort jobs by
+    # -t: job state, descending (i.e., running first)
+    # -M: time used, descending (i.e., longest running first)
+    # -p: priority, descending (i.e., if nothing running, highest priority pending first)
+    output = execute(f'squeue --me --sort=-t,-M,-p --format=%i --noheader --name={job_name}', capture=True)
+    job_id = output.strip().split('\n')[0]
+    return job_id
+
+
+@click.command(context_settings={"ignore_unknown_options": True})
+@click.argument('job_id')
+def main(job_id):
+    try:
+        job_id_int = int(job_id)
+        job_name = None
+    except ValueError:
+        # we are given a job name
+        job_name = job_id
+        job_id = get_job_id(job_name)
+
+    job_state = None
+    while True:
+        new_job_state = get_job_state(job_id)
+        if new_job_state != job_state:
+            if job_state is not None:
+                print()
+            if job_id != '':
+                print(f"job {job_id} is {new_job_state}", end='', flush=True)
+                if job_name is None and new_job_state == '':
+                    print(f"Job not existing anymore, quitting")
+                    sys.exit(0)
+            else:
+                print(f"Waiting or job {job_name} to appear", end="", flush=True)
+            job_state = new_job_state
+            last_state_change = datetime.utcnow()
+        else:
+            time_passed = datetime.utcnow() - last_state_change
+            time_passed_str = str(time_passed).split('.', 1)[0]
+            if job_id != '':
+                print(f"\rjob {job_id} is {new_job_state} since {time_passed_str}", end='', flush=True)
+            else:
+                print(f"\rWaiting for job {job_name} to appear since {time_passed_str}", end='', flush=True)
+
+        if job_state.startswith('RUNNING'):
+            job_state, step_no = job_state.split('.')
+            if step_no != 'None':
+                execute(f'sattachx {job_id}')
+        elif job_name is not None or job_id is None:
+
+            new_job_id = get_job_id(job_name)
+            if new_job_id != job_id:
+                print()
+                print(f"switching to monitoring job {new_job_id}")
+                job_id = new_job_id
+                job_state = None
+
+        sleep(10)
+
+if __name__ == '__main__':
+    main()
