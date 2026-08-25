@@ -314,7 +314,9 @@ remaining callers. Golden data commands byte-identical."
 Removes symbols confirmed unreferenced: `_get_origin`, the `FORBIDDEN_TAG_PREFIXES` constant, the commented-out dead blocks, and the `joblib` import (whose only use was the commented `_history` block).
 
 **Files:**
-- Modify: `extensions/xr3/xr3` (delete `from joblib import Parallel, delayed` line 17; `FORBIDDEN_TAG_PREFIXES` ~31–33; `_get_origin` ~300–302; commented blocks: `_history` parallel ~317–323, `_submit_job` `if False:` ~1691, commented `--nodelist`/`--exclude` sbatch options ~1653–1659, `status` per-cluster loop ~1928–1937).
+- Modify: `extensions/xr3/xr3` (delete `from joblib import Parallel, delayed` line 17; `FORBIDDEN_TAG_PREFIXES` ~31–33; `_get_origin` ~300–302; commented blocks: `_history` parallel ~317–323, commented `--nodelist`/`--exclude` sbatch options ~1653–1659 (keep the LIVE `"--exclude": "galvani-cn221,galvani-cn240"`), `status` per-cluster loop ~1928–1937).
+
+> **Deferred to Phase 4:** the `if False:` block in `_submit_job` (~1691) is NOT removed here — it's an `if False: … else: <live code>`, so cleaning it means collapsing the `else` and dedenting the live line (not a pure deletion). That whole sattach section is rewritten when `sattachx` is absorbed in Phase 4, so it's handled there.
 
 - [ ] **Step 1: Confirm each anchor is truly unreferenced**
 
@@ -329,7 +331,7 @@ Expected: none of these appear in live (non-comment) code except their own defin
 
 - [ ] **Step 2: Delete the dead symbols and comment blocks (bottom-first)**
 
-Delete, from bottom of file up: the `status` per-cluster commented loop, the commented sbatch `--nodelist`/`--exclude` option lines, the `if False:` block in `_submit_job`, the commented parallel block in `_history`, `_get_origin`, `FORBIDDEN_TAG_PREFIXES`, and finally the `from joblib import Parallel, delayed` import. Then:
+Delete, from bottom of file up: the `status` per-cluster commented loop, the commented sbatch `--nodelist`/`--exclude` option lines (keeping the LIVE `"--exclude": "galvani-cn221,galvani-cn240"`), the commented parallel block in `_history`, `_get_origin`, `FORBIDDEN_TAG_PREFIXES`, and finally the `from joblib import Parallel, delayed` import. (The `if False:` block is deferred to Phase 4 — see note above.) Then:
 ```bash
 python -c "import ast; ast.parse(open('xr3').read())" && echo "parse OK"
 grep -n 'joblib\|FORBIDDEN_TAG_PREFIXES\|_get_origin' xr3 || echo "all gone"
