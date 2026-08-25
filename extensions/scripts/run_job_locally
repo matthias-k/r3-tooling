@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -xe
+# pipefail so a failing `run.sh` isn't masked by `tee`'s exit status (see the run line below).
+set -o pipefail
+
+SCRATCH_JOB_DIR="/scratch_local/$(whoami)-${SLURM_JOB_ID}/job"
+SCRATCH_PARENT_DIR="$(dirname "$SCRATCH_JOB_DIR")"
+
+if [ -d "$SCRATCH_JOB_DIR" ]; then
+    echo "Directory $SCRATCH_JOB_DIR exists."
+    echo "Options:"
+    echo "  [d] Delete it"
+    echo "  [n] Create new temp directory (parallel to 'job')"
+    echo "  [c] Cancel"
+    read -p "Choice [d/n/c]: " -n 1 -r
+    echo
+    case $REPLY in
+        [Dd])
+            rm -rf "$SCRATCH_JOB_DIR"
+            echo "Deleted $SCRATCH_JOB_DIR"
+            ;;
+        [Nn])
+            SCRATCH=$(mktemp -d "$SCRATCH_PARENT_DIR/job_XXXXXX")
+            export SCRATCH
+            echo "Created new scratch directory: $SCRATCH"
+            ;;
+        *)
+            echo "Cancelled."
+            exit 0
+            ;;
+    esac
+fi
+
+JOB_DIRECTORY=$1
+LOGFILE="output/slurm_manual_$(date +%Y%m%d_%H%M%S).log"
+
+echo "Logging to $LOGFILE"
+
+# 2>&1 so stderr (evaluate.py output, Python tracebacks, singularity diagnostics) is captured
+# in the log too — not just run.sh's stdout echoes.
+cd "$JOB_DIRECTORY" && bash run.sh 2>&1 | tee "$LOGFILE"
