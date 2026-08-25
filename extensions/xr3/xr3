@@ -14,7 +14,6 @@ from time import sleep
 
 import yaml
 import click
-from joblib import Parallel, delayed
 import r3
 from executor import ExternalCommandFailed, execute, ExternalCommand
 from executor.ssh.client import RemoteCommand
@@ -26,10 +25,6 @@ IGNORED_DESTINATIONS = [
 
 IGNORED_REPOSITORIES = [
     # "git@github.com:mtangemann/research-common.git",
-]
-
-FORBIDDEN_TAG_PREFIXES = [
-    'bug/',
 ]
 
 HEADNODES=[
@@ -297,11 +292,6 @@ def find(tags: Iterable[str], path_glob: Optional[str], queries: Iterable[str], 
             print(job.id)
 
 
-def _get_origin(job_path: Path) -> tuple[str, str]:
-    job = r3.Job(job_path, id=job_path.name)
-    return str(job.id), job.metadata.get("origin")
-
-
 def _history(latest: bool, path: Path, repository_path: Path) -> list[r3.Job]:
     repository = r3.Repository(repository_path)
     results = []
@@ -313,14 +303,6 @@ def _history(latest: bool, path: Path, repository_path: Path) -> list[r3.Job]:
     results = repository.find({
         "path": origin
     }, latest=latest)
-
-    #origins = dict(Parallel(n_jobs=32)(delayed(_get_origin)(repository.path / "jobs" / job_id) for job_id in repository._index._entries.keys()))
-
-    # for job_id, job_origin in origins.items():
-    #     if job_origin is None:
-    #         print("origin missing from", job_id)
-    #     if job_origin == origin:
-    #         results.append(r3.Job(repository.path / "jobs" / job_id, id=job_id))
 
     if not latest:
     #    results = [max(results, key=lambda job: job.datetime)]
@@ -1592,13 +1574,7 @@ def _submit_job(path: Path, dry: bool = False, check_existing_jobs: bool = False
         "--chdir": path,
         "--output": output_path,
         "--error": output_path,
-        #"--nodelist": "galvani-cn124",
-
-        #"--exclude": "galvani-cn229",
-        #"--exclude": "galvani-cn231",
         "--exclude": "galvani-cn221,galvani-cn240",
-        # "--exclude": "galvani-cn135,galvani-cn136,galvani-cn137"
-        # '--array': '35-35' if is_array_job else None,  # hotfix for local global model
     }
     if partition is not None:
         options["--partition"] = partition
@@ -1804,16 +1780,6 @@ def status(summary, details, tags):
         else:
             state = ''
 
-        # for cluster in HEADNODES:
-        #     cmd = RemoteCommand(cluster, f"squeue --me --noheader --format='%i|%T' --name={job.id}", capture=True)
-        #     cmd.start()
-        #     squeue_output = cmd.output
-        #     if squeue_output.strip():
-        #         cluster_job_id, cluster_state = squeue_output.strip().split('|', 1)
-        #         break
-        # else:
-        #     cluster_job_id = None
-        #     cluster_state = None
         cluster_job_id, cluster_state = running_jobs.get(job.id, (None, None))
 
         return state, cluster_job_id, cluster_state
