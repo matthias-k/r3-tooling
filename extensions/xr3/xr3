@@ -1484,27 +1484,6 @@ def git_check(verbose: bool, path: Path, repository_path: Path) -> None:
 
 
 @cli.group()
-def slurm():
-    pass
-
-@slurm.command()
-@click.argument('path', type=click.Path(exists=True, file_okay=False, path_type=Path))
-def watch_location(path: Path):
-    repository_path = os.environ["R3_REPOSITORY"]
-    repository = r3.Repository(repository_path)
-
-
-    _jobs = _history(latest=True, path=path, repository_path=repository_path)
-    if not _jobs:
-        raise ValueError(f"No job found for {path}")
-    job, = _jobs
-    main_tag = job.metadata['tags'][0]
-    print(f"using tag {job.id}: {job.metadata['tags'][0]}")
-
-    _watch([main_tag], 'newest')
-
-
-@cli.group()
 def submit():
     pass
 
@@ -1549,43 +1528,6 @@ def submit_jobs(job_ids, dry: bool = False, check_existing_jobs: bool = False, r
         _submit_job(job_path, dry=dry, check_existing_jobs=check_existing_jobs, restart_failed=restart_failed, cluster=cluster, observe=observe)
 
 
-
-
-@submit.command(name='location', help='look up jobs via the path attribute and submit them')
-@click.argument("paths", type=click.Path(exists=True, file_okay=False, path_type=Path), nargs=-1)
-@click.option("--dry/--no-dry", default=False)
-@click.option("--check-existing-jobs/--no-check-existing-jobs", default=False, help="Check if job is already submitted.")
-@click.option("-r", "--restart-failed/--no-restart-failed", default=False)
-@click.option("--cluster", "-c", type=str, default="galvani")
-@click.option("-o", "--observe/--no-observe", default=False)
-@click.option("-v", "--verbose", count=True, default=0)
-@click.option("--partition", "-p", type=str, default=None)
-@click.option("--mem", "-m", type=str, default=None, help="Override memory allocation (e.g., '60G', '120G')")
-def submit_location(paths, dry: bool = False, check_existing_jobs: bool = False, restart_failed: bool = False, cluster: str = "galvani", observe: bool = False, verbose: int = 0, partition: Optional[str] = None, mem: Optional[str] = None):
-    repository_path = os.environ["R3_REPOSITORY"]
-    repository = r3.Repository(repository_path)
-    if len(paths) > 1 and observe:
-        raise ValueError("Can't observe multiple jobs at once.")
-
-
-    jobs: List[r3.Job] = []
-    for path in paths:
-        _jobs = _history(latest=True, path=path, repository_path=repository_path)
-        if not _jobs:
-            raise ValueError(f"No job found for {path}")
-        job, = _jobs
-        if verbose >= 1:
-            print(f"Found job {job.id}: {job.metadata['tags'][0]}")
-        jobs.append(job)
-
-    if verbose:
-        print(f"Submitting {len(jobs)} jobs")
-
-    for job in jobs:
-        job_path = job.path
-        print("PATH", job_path)
-        #job_path = repository.path / "jobs" / str(job.id)
-        _submit_job(job_path, dry=dry, check_existing_jobs=check_existing_jobs, restart_failed=restart_failed, cluster=cluster, observe=observe, verbose=verbose, partition=partition, mem=mem)
 
 
 def _submit_job(path: Path, dry: bool = False, check_existing_jobs: bool = False, observe: bool = False, restart_failed: bool = False, cluster=None, verbose: int = 0, partition: Optional[str] = None, mem: Optional[str] = None) -> bool:
@@ -1695,69 +1637,6 @@ def _submit_job(path: Path, dry: bool = False, check_existing_jobs: bool = False
                 #execute(f"sattachx {job_id}")
                 sattach_cmd.start()
         return True
-
-
-@submit.command(name='auto')
-@click.option("--tag", "-t", "tags", multiple=True, type=str)
-@click.option("--dry/--no-dry", default=False)
-@click.option("--partition", "-p", type=str, default=None)
-@click.option(
-    "-v",
-    "--verbose",
-    count=True,
-    default=0,
-    help="-v for DEBUG",
-)
-#@click.option("--check-existing-jobs/--no-check-existing-jobs", default=False, help="Check if job is already submitted.")
-def submit_auto(tags, dry: bool = False, partition: Optional[str] = None, verbose: int = 0):
-    repository_path = os.environ["R3_REPOSITORY"]
-    repository = r3.Repository(repository_path)
-    #query = {
-    #    'tags': {
-    #        '$all': ['autoslurm', 'galvani'] + list(tags)
-    #    }
-    #}
-    query = {
-        '$and': [
-            {
-                'tags': {
-                    '$all': ['autoslurm', 'galvani']
-                }
-            },
-        ]
-    }
-    for tag in list(tags):
-        query['$and'].append({
-            'tags': {
-                '$glob': tag
-            }
-        })
-    jobs = repository.find(query=query)
-    jobs = sorted(jobs, key=lambda job: job.timestamp, reverse=True)
-    considered_jobs = []
-    origins = []
-
-    for job in jobs:
-        if job.metadata['path'] not in origins:
-            considered_jobs.append(job)
-            origins.append(job.metadata['path'])
-
-    print("considered jobs", len(considered_jobs))
-
-    for job in considered_jobs:
-        if verbose >= 4:
-            print("considering job", job.metadata['tags'][0])
-        submitted = _submit_job(
-            job.path,
-            dry=dry,
-            check_existing_jobs=True,
-            restart_failed='autoslurm:restart_failed' in job.metadata['tags'],
-            cluster='galvani',
-            partition=partition,
-            verbose=max(verbose - 1, 0)
-        )
-        if submitted and verbose >= 1:
-            print(f"Submitted job {job.metadata['tags'][0]}.")
 
 
 def check_for_slurm_job(job_id):
