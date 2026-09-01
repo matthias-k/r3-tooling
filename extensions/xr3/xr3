@@ -21,6 +21,7 @@ from tqdm import tqdm
 
 import functools
 import xr3config
+import xr3pathmap
 
 HEADNODES=[
     # 'slogin2',
@@ -320,8 +321,10 @@ def _config():
 def _get_path(path: Path) -> str:
     """Map a working-directory path to its r3 logical path (from config)."""
     try:
-        return xr3config.resolve_job_path(Path(path), _config())
-    except xr3config.PathmapError as e:
+        return xr3pathmap.resolve_job_path(
+            Path(path), _config(), config_source=str(xr3config.config_path())
+        )
+    except xr3pathmap.PathmapError as e:
         raise click.ClickException(str(e))
 
 
