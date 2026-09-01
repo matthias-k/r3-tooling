@@ -151,9 +151,136 @@ def _sattach_wait(job_name_or_id: str, cluster: Optional[str] = None) -> None:
         sleep(10)
 
 
+def _submit_job(
+    path: Path,
+    cluster: Optional[str],
+    dry: bool = False,
+    check_existing_jobs: bool = False,
+    observe: bool = False,
+    restart_failed: bool = False,
+    verbose: int = 0,
+) -> bool:
+    path = path.absolute()
+    done_file = path / "output" / "done"
+
+    if done_file.is_file():
+        done_state = xr3slurmlib.parse_done_state(done_file.read_text())
+        if done_state == "restart":
+            if verbose >= 3:
+                print("restart requested")
+        elif done_state == "failed" and restart_failed:
+            if verbose >= 2:
+                print("restarting failed job")
+            if not dry:
+                done_file.write_text("restart\n")
+        else:
+            return False
+
+    script = path / "run.sh"
+    if not script.exists():
+        raise click.ClickException("No run script.")
+
+    full_id = path.name
+    try:
+        uuid.UUID(full_id)
+    except ValueError:
+        raise click.ClickException("Job directory is not a valid UUID.")
+
+    if check_existing_jobs:
+        squeue_output = _capture(cluster, f"squeue --noheader --name={full_id}")
+        if squeue_output.strip():
+            if verbose >= 3:
+                print(f"Job is already in queue:\n{squeue_output}")
+            return False
+
+    slurm_cfg = _slurm_config()
+    command = xr3slurmlib.build_sbatch_command(
+        script_path=str(script),
+        job_dir=str(path),
+        full_id=full_id,
+        is_array=xr3slurmlib.is_array_job(script.read_text()),
+        exclude_nodes=slurm_cfg["exclude_nodes"],
+        partition=slurm_cfg["partition"],
+        mem=slurm_cfg["mem"],
+    )
+
+    if dry:
+        if verbose >= 1:
+            print(f"Would submit job {full_id}:")
+        print(command)
+        return True
+
+    os.makedirs(path / "output", exist_ok=True)
+    cmd = _run(cluster, command, capture=True)
+    print(command)
+    cmd.start()
+    output = cmd.output
+    print(output)
+
+    if observe:
+        match = re.match(r"^Submitted batch job (.*)$", output)
+        if not match:
+            print("Observing failed: Unable to get job id from job.")
+        else:
+            job_id = match.group(1)
+            print("Sleeping for 5s before attaching...")
+            time.sleep(5)
+            _sattach_wait(job_id, cluster=None)
+    return True
+
+
 @click.group()
 def cli():
     pass
+
+
+@cli.command()
+@click.argument("job_ids", type=click.UUID, nargs=-1)
+@click.option("--tag", "-t", "tags", multiple=True, type=str,
+              help="Select jobs by tag ($all). Combine with JOB_IDS or --query.")
+@click.option("--query", "-q", "queries", type=str, multiple=True,
+              help="JSON query fragment to select jobs. Repeatable.")
+@click.option("--dry/--no-dry", default=False)
+@click.option("--check-existing-jobs/--no-check-existing-jobs", default=False,
+              help="Skip jobs already in the queue.")
+@click.option("-r", "--restart-failed/--no-restart-failed", default=False)
+@click.option("--cluster", "-c", default=None,
+              help='sbatch host. Default: slurm.submit_host. Pass "" to submit locally.')
+@click.option("-o", "--observe/--no-observe", default=False,
+              help="Attach to the job after submitting (single job only).")
+def submit(job_ids, tags, queries, dry, check_existing_jobs, restart_failed, cluster, observe):
+    """Submit jobs to SLURM, selected by JOB_IDS and/or --tag/--query."""
+    if cluster is None:
+        cluster = _slurm_config()["submit_host"]
+    if not cluster:            # "" or null => submit locally
+        cluster = None
+
+    repository = r3.Repository(os.environ["R3_REPOSITORY"])
+    paths = []
+
+    for job_id in job_ids:
+        paths.append(repository.path / "jobs" / str(job_id))
+
+    if tags or queries:
+        query = _build_query(tags, queries)
+        print(f"Selecting jobs with query:\n{json.dumps(query, indent=2)}")
+        found = repository.find(query=query)
+        for job in found:
+            print(f"  {job.id}: {job.metadata.get('tags', ['no tags'])[0]}")
+            paths.append(Path(job.path))
+
+    paths = list(dict.fromkeys(paths))  # dedup: a job given as JOB_ID may also match --tag/--query
+    if not paths:
+        raise click.ClickException("No jobs selected (give JOB_IDS, --tag, or --query).")
+    if observe and len(paths) > 1:
+        raise click.ClickException("Can't observe more than one job at once.")
+
+    for path in paths:
+        _submit_job(
+            Path(path), cluster=cluster, dry=dry,
+            check_existing_jobs=check_existing_jobs,
+            restart_failed=restart_failed, observe=observe,
+        )
 
 
 if __name__ == "__main__":
