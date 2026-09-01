@@ -14,9 +14,9 @@
 
 ## Config format decision (flag for plan review)
 
-The spec left "exact path/format a planning detail." This plan chooses **YAML** at **`~/.config/r3/xr3.yaml`**, overridable via **`$XR3_CONFIG`**:
+The spec left "exact path/format a planning detail." This plan chooses **YAML** at **`~/.config/xr3.yaml`**, overridable via **`$XR3_CONFIG`**:
 - YAML (not TOML): matches the r3 ecosystem (`r3.yaml`, `metadata.yaml`) and `pyyaml` is already an xr3 dependency — no new dep.
-- Per-user `~/.config/r3/xr3.yaml`: pathmap roots are per-machine and SLURM settings (Phase 4) are per-cluster/user.
+- Per-user `~/.config/xr3.yaml`: pathmap roots are per-machine and SLURM settings (Phase 4) are per-cluster/user.
 - `$XR3_CONFIG` override: lets tests and the golden run point at a fixture without touching the user's real config.
 
 If you'd prefer TOML or a different location, say so before implementation — it's a one-place change here.
@@ -151,7 +151,7 @@ from typing import Optional
 
 import yaml
 
-DEFAULT_CONFIG_PATH = Path.home() / ".config" / "r3" / "xr3.yaml"
+DEFAULT_CONFIG_PATH = Path.home() / ".config" / "xr3.yaml"
 
 DEFAULTS = {
     "pathmap": {"roots": []},
@@ -212,7 +212,7 @@ git add extensions/xr3/xr3config.py extensions/xr3/tests/test_xr3config.py
 git commit -m "feat(xr3): xr3config.load_config with defaults + deep-merge
 
 Pure module (stdlib + pyyaml), unit-tested. Config location:
-\$XR3_CONFIG or ~/.config/r3/xr3.yaml; missing file -> defaults."
+\$XR3_CONFIG or ~/.config/xr3.yaml; missing file -> defaults."
 ```
 
 ## Task 2.2: TDD `xr3config.resolve_job_path` (pathmap + prefix + error)
@@ -329,7 +329,7 @@ _get_path list (wired in a later task)."
 
 Create `extensions/xr3/xr3.example.yaml`:
 ```yaml
-# xr3 configuration — copy to ~/.config/r3/xr3.yaml (or point $XR3_CONFIG at it)
+# xr3 configuration — copy to ~/.config/xr3.yaml (or point $XR3_CONFIG at it)
 # and edit for your machine. See CONTRACT.md for what xr3 assumes about jobs.
 
 pathmap:
