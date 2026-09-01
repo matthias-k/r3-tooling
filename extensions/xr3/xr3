@@ -22,14 +22,6 @@ from tqdm import tqdm
 import functools
 import xr3config
 
-IGNORED_DESTINATIONS = [
-    # "container.sif",
-]
-
-IGNORED_REPOSITORIES = [
-    # "git@github.com:mtangemann/research-common.git",
-]
-
 HEADNODES=[
     # 'slogin2',
     'galvani',
@@ -388,7 +380,7 @@ def _check_job(path, repository, check_git: bool = True):
                 depending_job = r3.Job(repository.path / "jobs" / depending_job)
 
             for tag in depending_job.metadata.get("tags", []):
-                if tag.startswith("bug/"):
+                if any(tag.startswith(p) for p in _config()["blockers"]["tags"]):
                     print(f"ERROR: Dependency {dependency} has bug tag '{tag}'.")
                     correct = False
         if dependency not in repository:
@@ -422,7 +414,7 @@ def _check_job(path, repository, check_git: bool = True):
             correct = False
 
     wip_items = job.metadata.get("WIP", [])
-    if wip_items:
+    if wip_items and _config()["blockers"]["block_on_wip"]:
         print(f"Job has {len(wip_items)} WIP items:")
         for item in wip_items:
             print(f" - {item}")
@@ -1289,7 +1281,7 @@ def dev_checkout(allow_bugs: bool, path: str, repository_path: str) -> None:
             resolved_dependency = repository.resolve(dependency)
             dependency_job = r3.Job(repository.path / 'jobs' / resolved_dependency.job)
             tags = dependency_job.metadata.get("tags", [])
-            bug_tags = [tag for tag in tags if tag.startswith("bug/")]
+            bug_tags = [tag for tag in tags if any(tag.startswith(p) for p in _config()["blockers"]["tags"])]
             if bug_tags:
                 print(f"Bugged dependency for {dependency.destination}:")
                 for tag in bug_tags:
@@ -1300,11 +1292,11 @@ def dev_checkout(allow_bugs: bool, path: str, repository_path: str) -> None:
         sys.exit(1)
 
     for dependency in job.dependencies:
-        if str(dependency.destination) in IGNORED_DESTINATIONS:
+        if str(dependency.destination) in _config()["dev_checkout"]["ignored_destinations"]:
             print(f"Skipping {dependency.destination} (ignored destination)")
             continue
 
-        if isinstance(dependency, r3.GitDependency) and dependency.repository in IGNORED_REPOSITORIES:  # noqa: E501
+        if isinstance(dependency, r3.GitDependency) and dependency.repository in _config()["dev_checkout"]["ignored_repositories"]:  # noqa: E501
             print(f"Skipping {dependency.repository} (ignored repository)")
             continue
 
