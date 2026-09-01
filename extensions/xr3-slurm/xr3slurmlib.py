@@ -72,6 +72,22 @@ def parse_sattach_step(sacct_output: str) -> Optional[str]:
     return None
 
 
+def remove_common_prefix(strings: List[str]) -> List[str]:
+    """Trim the shared leading prefix from all strings (for compact display).
+
+    A single string has nothing to disambiguate against, so it's returned
+    unchanged (the multi-string trimming logic over-trims a lone string).
+    """
+    strings = list(strings)
+    if len(strings) <= 1:
+        return strings
+    i = 0
+    for i in range(len(strings[0])):
+        if not all(s.startswith(strings[0][:i]) for s in strings):
+            break
+    return [s[i - 1:] for s in strings]
+
+
 def parse_running_step(sacct_p_output: str) -> Optional[int]:
     """Step number from the last row of `sacct -j <id> -P`, or None.
 

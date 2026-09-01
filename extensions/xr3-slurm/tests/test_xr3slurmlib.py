@@ -65,3 +65,22 @@ def test_parse_running_step():
     assert lib.parse_running_step("JobID|...\n12345|...\n12345.0|...\n") == 0
     assert lib.parse_running_step("JobID|...\n12345|...\n12345.batch|...\n") is None
     assert lib.parse_running_step("JobID|...\n12345|...\n") is None
+
+
+def test_remove_common_prefix():
+    # single string: returned unchanged (was the over-trim bug)
+    assert lib.remove_common_prefix(["experiments/2026/foo"]) == ["experiments/2026/foo"]
+    # empty: unchanged
+    assert lib.remove_common_prefix([]) == []
+    # multiple, divergence before the final character: shared leading prefix
+    # trimmed cleanly, keeping the divergent tail intact.
+    assert lib.remove_common_prefix(["abcXd", "abcYd"]) == ["Xd", "Yd"]
+    assert lib.remove_common_prefix(["run_alpha", "run_beta"]) == ["alpha", "beta"]
+    # multiple, divergence AT the final character (all strings equal length):
+    # the loop's `range(len(strings[0]))` never probes the full-length prefix,
+    # so it exits without ever finding the mismatch and `s[i - 1:]` retains one
+    # extra shared character. This is a pre-existing quirk of the unchanged
+    # multi-string algorithm (present before this task too) -- documented here,
+    # not "fixed", since only the single-element case is in scope.
+    assert lib.remove_common_prefix(["abcX", "abcY"]) == ["cX", "cY"]
+    assert lib.remove_common_prefix(["run_a", "run_b", "run_c"]) == ["_a", "_b", "_c"]

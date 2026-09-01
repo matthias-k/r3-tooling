@@ -229,6 +229,19 @@ def _submit_job(
     return True
 
 
+def _running_jobs_by_name() -> dict:
+    """{job_name: (slurm_id, state)} across all configured headnodes."""
+    running = {}
+    for cluster in _slurm_config()["headnodes"]:
+        output = _capture(cluster, "squeue --me --noheader --format='%j|%i|%T'")
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            job_name, job_id, job_state = line.split("|")
+            running[job_name] = (job_id, job_state)
+    return running
+
+
 @click.group()
 def cli():
     pass
@@ -281,6 +294,55 @@ def submit(job_ids, tags, queries, dry, check_existing_jobs, restart_failed, clu
             check_existing_jobs=check_existing_jobs,
             restart_failed=restart_failed, observe=observe,
         )
+
+
+@cli.command()
+@click.option("--summary/--no-summary", default=True)
+@click.option("--details/--no-details", default=True)
+@click.argument("tags", nargs=-1)
+def status(summary, details, tags):
+    """Show done/running status for jobs whose tags match the given globs."""
+    repository = r3.Repository(os.environ["R3_REPOSITORY"])
+    query = {"$and": [{"tags": {"$glob": tag}} for tag in tags]}
+    jobs = repository.find(query=query)
+
+    if not jobs:
+        print("No jobs found.")
+        return
+
+    running = _running_jobs_by_name()
+
+    def check_job_status(job):
+        done_file = job.path / "output" / "done"
+        state = ""
+        if done_file.is_file():
+            classified = xr3slurmlib.parse_done_state(done_file.read_text())
+            state = classified  # 'restart' | 'failed' | 'done'
+        cluster_job_id, cluster_state = running.get(job.id, (None, None))
+        return state, cluster_job_id, cluster_state
+
+    job_names = xr3slurmlib.remove_common_prefix([job.metadata["tags"][0] for job in jobs])
+    data = []
+    for job, job_name in zip(tqdm(jobs, delay=10), job_names):
+        state, cluster_job_id, cluster_state = check_job_status(job)
+        data.append({
+            "job_name": job_name, "job_state": state,
+            "cluster_job_id": cluster_job_id, "cluster_state": cluster_state,
+        })
+
+    if summary:
+        summary_states = []
+        for item in data:
+            parts = [item[k] for k in ("job_state", "cluster_state") if item[k]]
+            summary_states.append("-".join(parts))
+        for key, value in Counter(summary_states).items():
+            print(f"{key}: {value}")
+
+    if details:
+        for item in sorted(data, key=lambda i: i["job_name"]):
+            jid = item["cluster_job_id"] or ""
+            cstate = item["cluster_state"] or ""
+            print(f"{item['job_name']}: {item['job_state']} {jid} {cstate}")
 
 
 if __name__ == "__main__":
