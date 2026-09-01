@@ -1194,8 +1194,6 @@ def diff(color: Optional[bool], structured: bool, resolved: bool, stat: bool, na
 @click.option('-r', "--remove-previous/--no-remove-previous", default=False)
 @click.option("-c", "--copy-previous-output/--no-copy-previous-output", default=False)
 @click.option('-x', "--exclude-done/--no-exclude-done", default=False)
-@click.option('-s', '--submit/--no-submit', default=False)
-@click.option('-o', '--observe/--no-observe', default=False, help="Attach to job after submission.")
 @click.option('--check/--no-check', default=True, help="Check job (path metadata and buggy dependencies). Defaults to true")
 @click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.argument(
@@ -1203,7 +1201,7 @@ def diff(color: Optional[bool], structured: bool, resolved: bool, stat: bool, na
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     envvar="R3_REPOSITORY",
 )
-def commit(remove_previous, copy_previous_output, exclude_done, submit: bool, observe: bool, check: bool, path, repository_path):
+def commit(remove_previous, copy_previous_output, exclude_done, check: bool, path, repository_path):
     if check:
         correct = _check_job(path, repository_path)
         if not correct:
@@ -1251,10 +1249,6 @@ def commit(remove_previous, copy_previous_output, exclude_done, submit: bool, ob
         assert previous_job is not None
         print("deleting previous job", previous_job.path)
         repository.remove(previous_job)
-
-    if submit:
-        print("Submitting job")
-        _submit_job(job.path, dry=False, check_existing_jobs=False, restart_failed=False, observe=observe, cluster='galvani')
 
 
 @cli.command(name="dev-checkout")
