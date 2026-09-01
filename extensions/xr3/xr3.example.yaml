@@ -1,0 +1,18 @@
+# xr3 configuration — copy to ~/.config/xr3.yaml (or point $XR3_CONFIG at it)
+# and edit for your machine. See CONTRACT.md for what xr3 assumes about jobs.
+
+pathmap:
+  # Working directories under these roots map to r3 logical paths by stripping
+  # the root prefix. `history`, `diff`, and `check`'s path asserts need this.
+  roots:
+    - path: /abs/path/to/your/project
+    # - path: /abs/path/to/another/project
+    #   prefix: some-prefix        # optional: prepend to the derived r3 path
+
+blockers:
+  tags: ["bug/"]        # tag prefixes that block `check` and `dev-checkout`
+  block_on_wip: true    # a non-empty metadata.WIP fails `check`
+
+dev_checkout:
+  ignored_destinations: []    # dep destinations to skip when checking out
+  ignored_repositories: []    # git dep repos to skip when checking out
