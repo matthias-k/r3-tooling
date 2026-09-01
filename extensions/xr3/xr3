@@ -19,6 +19,9 @@ from executor import ExternalCommandFailed, execute, ExternalCommand
 from executor.ssh.client import RemoteCommand
 from tqdm import tqdm
 
+import functools
+import xr3config
+
 IGNORED_DESTINATIONS = [
     # "container.sif",
 ]
@@ -311,31 +314,17 @@ def _history(latest: bool, path: Path, repository_path: Path) -> list[r3.Job]:
 
     return results
 
+@functools.lru_cache(maxsize=1)
+def _config():
+    return xr3config.load_config()
+
+
 def _get_path(path: Path) -> str:
-    """Extract the internal job path from a given file system path
-    """
-    task_root_directories = [
-        Path('/mnt/qb/home/bethge/mkuemmerer31/projects/gaze-combined-datasets/tasks'),
-        Path('/mnt/qb/home/bethge/mkuemmerer31/projects/deepgaze-vs-scenewalk'),
-        Path('/mnt/lustre/work/bethge/mkuemmerer31/projects/gaze-combined-datasets/tasks'),
-        Path('/mnt/lustre/work/bethge/mkuemmerer31/projects/deepgaze-vs-scenewalk'),
-        Path('/mnt/lustre/work/bethge/mkuemmerer31/projects/gold-standard'),
-        Path('/mnt/lustre/work/bethge/mkuemmerer31/projects/saliency-benchmarking'),
-        Path('/mnt/lustre/work/bethge/mkuemmerer31/projects/Jannis-OneBench'),
-        Path('/mnt/lustre/work/bethge/mkuemmerer31/projects/research'),
-    ]
-
-
-    tasks_root_directory, = [task_root_directory for task_root_directory in task_root_directories if path.resolve().is_relative_to(task_root_directory)]
-
-    task_path = path.resolve().relative_to(tasks_root_directory)
-
-    if tasks_root_directory == Path('/mnt/lustre/work/bethge/mkuemmerer31/projects/gaze-combined-datasets/tasks'):
-        task_path = Path('combined-gaze-datasets') / task_path
-
-    # print("FOUND TASK PATH", task_path)
-    origin = str(task_path)
-    return origin
+    """Map a working-directory path to its r3 logical path (from config)."""
+    try:
+        return xr3config.resolve_job_path(Path(path), _config())
+    except xr3config.PathmapError as e:
+        raise click.ClickException(str(e))
 
 
 def _build_query(tags, queries, path_glob=None) -> dict:
