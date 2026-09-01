@@ -16,3 +16,10 @@ blockers:
 dev_checkout:
   ignored_destinations: []    # dep destinations to skip when checking out
   ignored_repositories: []    # git dep repos to skip when checking out
+
+slurm:                     # read only by xr3-slurm (MLCloud / galvani; ports to other SLURM)
+  headnodes: ["galvani"]   # hosts to SSH for squeue/sacct (status, watch --tag)
+  submit_host: galvani     # host to SSH for sbatch; set null (or pass --cluster "") to submit locally
+  exclude_nodes: []        # e.g. ["galvani-cn221", "galvani-cn240"]
+  partition: null          # default --partition
+  mem: null                # default --mem

@@ -1,0 +1,62 @@
+import functools
+import json
+import os
+import re
+import sys
+import time
+import uuid
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+from time import sleep
+from typing import List, Optional
+
+import click
+import r3
+from executor import ExternalCommand, ExternalCommandFailed, execute
+from executor.ssh.client import RemoteCommand
+from tqdm import tqdm
+
+# xr3-slurm reuses the suite-wide config loader that lives in the sibling xr3 dir.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "xr3"))
+import xr3config
+
+import xr3slurmlib
+
+
+@functools.lru_cache(maxsize=1)
+def _config() -> dict:
+    return xr3config.load_config()
+
+
+def _slurm_config() -> dict:
+    return _config()["slurm"]
+
+
+def _build_query(tags, queries) -> dict:
+    """Build a Mongo-style query dict from tag/query CLI options.
+
+    Copied (intentionally) from xr3 so xr3-slurm stays self-contained.
+    - tags -> {"tags": {"$all": [...]}} (omitted if empty)
+    - queries: JSON fragments; bare `key: value` is wrapped in {...} and merged.
+    """
+    query: dict = {}
+    if tags:
+        query["tags"] = {"$all": list(tags)}
+    for q in queries:
+        if not q.startswith("{"):
+            q = f"{{{q}}}"
+        query_data = json.loads(q)
+        if not isinstance(query_data, dict):
+            raise ValueError(f"Query must be a JSON object, got {query_data}")
+        query.update(query_data)
+    return query
+
+
+@click.group()
+def cli():
+    pass
+
+
+if __name__ == "__main__":
+    cli()

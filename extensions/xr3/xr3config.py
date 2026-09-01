@@ -1,7 +1,7 @@
-"""Configuration loading for xr3.
+"""Configuration loading for the xr3 tool suite (xr3 + xr3-slurm).
 
 Pure logic (stdlib + pyyaml only) so it is unit-testable without r3/executor.
-The xr3 CLI imports load_config() from here. See xr3pathmap for the
+Each tool reads only its own section(s). See xr3pathmap for the
 working-dir->r3-path mapping.
 """
 from __future__ import annotations
@@ -18,6 +18,13 @@ DEFAULTS = {
     "pathmap": {"roots": []},
     "blockers": {"tags": ["bug/"], "block_on_wip": True},
     "dev_checkout": {"ignored_destinations": [], "ignored_repositories": []},
+    "slurm": {
+        "headnodes": ["galvani"],   # squeue/sacct polling targets (status, watch --tag)
+        "submit_host": "galvani",   # sbatch SSH target; null/"" => submit locally
+        "exclude_nodes": [],        # sbatch --exclude nodes (empty => no --exclude)
+        "partition": None,          # default sbatch --partition (null => omit)
+        "mem": None,                # default sbatch --mem (null => omit)
+    },
 }
 
 
