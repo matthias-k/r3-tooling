@@ -2,13 +2,37 @@
 
 Resume state for the xr3 extraction/cleanup work. Read this first after a context reset.
 
-## Status (2026-08-26)
+## Status (2026-09-01)
 
 - **Branch:** `xr3-extraction` (in `tools/r3-tooling`). **Kept open** — the user chose NOT to merge
   to `main` per-phase; do not merge without asking.
-- **Done:** Phases 0, 1, 2, 3 (lean). **Next:** Phase 4 (extract `xr3-slurm`).
+- **Done:** Phases 0, 1, 2, 3 (lean), **4 (xr3-slurm extraction — complete)**. **Next:** Phase 5 (move
+  `run_job_locally`; decide on further internal split), then Phase 6 (docs / CONTRACT.md).
 - **Execution mode:** subagent-driven-development (fresh subagent per task, controller verifies,
   final independent review on the larger phases). Commit trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+
+### Phase 4 result (commits `32d3092`..`8663ccf`, 9 commits)
+
+`extensions/xr3-slurm/` is a self-contained sibling tool: `xr3-slurm` CLI (455 lines) + pure
+`xr3slurmlib.py` (106 lines, stdlib-only, unit-tested) + `tests/` (7 tests). Commands: `submit`
+(merged old query+jobs; job-ids and/or `--tag`/`--query`; `--cluster` defaults to `slurm.submit_host`
+= SSH-to-headnode, `--cluster ""` submits locally; `--partition`/`--mem`/`--verbose`/`--observe`
+per-invocation; config-driven `--exclude`), `status` (config headnodes), `watch` (job-name/id
+primitive via absorbed sattach, `+ --tag` mode; the `newest-running_job` typo fixed). `sattachx`/
+`sattachx_wait` absorbed (raw-material sources deleted). SLURM code + unused imports removed from
+`xr3` — **golden gate `ALL DATA COMMANDS IDENTICAL`** confirms kept commands byte-unchanged. Config
+lives in `xr3config.DEFAULTS["slurm"]` (`headnodes`/`submit_host`/`exclude_nodes`/`partition`/`mem`);
+dev fixture `dev/xr3.config.local.yaml` carries real galvani values. 17/17 unit tests pass. `xr3` is
+now 1440 lines (was 1830). **Env note:** live SSH-to-galvani (submit-non-dry/status/watch polling)
+is UNREACHABLE from this container — verified by `--dry`/`--help`/golden instead.
+
+**Deferred from Phase 4 (accepted, not bugs)** — for later if wanted: `_running_jobs_by_name`/
+`_all_slurm_jobs` near-duplication (predates extraction); the 3x debounce-timer idiom in
+`_watch_by_tag`; `datetime.utcnow()` vs `now()` cosmetic mix; `xr3.example.yaml`'s `slurm:` uses real
+`galvani` rather than a placeholder (tidy in Phase 6); `slurm` config ships non-null galvani defaults
+so a config-less colleague silently gets galvani (reconcile with spec §7's "actionable hint" in Phase 6);
+no try/except around the watch poll loop (faithful to original); `R3_REPOSITORY` read via bare
+`os.environ[...]` in xr3-slurm (pre-existing pattern).
 
 Design authority: **`docs/specs/2026-08-22-xr3-extraction-design.md`** (the spec). Phase plans live in
 `docs/superpowers/plans/2026-08-*-xr3-extraction-*.md`.
