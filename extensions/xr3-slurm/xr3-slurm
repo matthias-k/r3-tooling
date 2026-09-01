@@ -9,11 +9,11 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from time import sleep
-from typing import List, Optional
+from typing import Optional
 
 import click
 import r3
-from executor import ExternalCommand, ExternalCommandFailed, execute
+from executor import ExternalCommand, ExternalCommandFailed
 from executor.ssh.client import RemoteCommand
 from tqdm import tqdm
 
@@ -159,6 +159,8 @@ def _submit_job(
     observe: bool = False,
     restart_failed: bool = False,
     verbose: int = 0,
+    partition: Optional[str] = None,
+    mem: Optional[str] = None,
 ) -> bool:
     path = path.absolute()
     done_file = path / "output" / "done"
@@ -200,8 +202,8 @@ def _submit_job(
         full_id=full_id,
         is_array=xr3slurmlib.is_array_job(script.read_text()),
         exclude_nodes=slurm_cfg["exclude_nodes"],
-        partition=slurm_cfg["partition"],
-        mem=slurm_cfg["mem"],
+        partition=partition if partition is not None else slurm_cfg["partition"],
+        mem=mem if mem is not None else slurm_cfg["mem"],
     )
 
     if dry:
@@ -344,7 +346,13 @@ def cli():
               help='sbatch host. Default: slurm.submit_host. Pass "" to submit locally.')
 @click.option("-o", "--observe/--no-observe", default=False,
               help="Attach to the job after submitting (single job only).")
-def submit(job_ids, tags, queries, dry, check_existing_jobs, restart_failed, cluster, observe):
+@click.option("-p", "--partition", default=None,
+              help="sbatch --partition for this submit (overrides slurm.partition).")
+@click.option("-m", "--mem", default=None,
+              help="sbatch --mem for this submit (overrides slurm.mem).")
+@click.option("-v", "--verbose", count=True, help="Increase verbosity (repeatable).")
+def submit(job_ids, tags, queries, dry, check_existing_jobs, restart_failed, cluster, observe,
+           partition, mem, verbose):
     """Submit jobs to SLURM, selected by JOB_IDS and/or --tag/--query."""
     if cluster is None:
         cluster = _slurm_config()["submit_host"]
@@ -376,6 +384,7 @@ def submit(job_ids, tags, queries, dry, check_existing_jobs, restart_failed, clu
             Path(path), cluster=cluster, dry=dry,
             check_existing_jobs=check_existing_jobs,
             restart_failed=restart_failed, observe=observe,
+            verbose=verbose, partition=partition, mem=mem,
         )
 
 
