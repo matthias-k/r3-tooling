@@ -242,6 +242,89 @@ def _running_jobs_by_name() -> dict:
     return running
 
 
+def _find_slurm_job(job_name: str):
+    """Return (cluster, slurm_id) for the first headnode with this job name."""
+    for cluster in _slurm_config()["headnodes"]:
+        output = _capture(
+            cluster, f"squeue --me --noheader --format=%i --name={job_name}"
+        )
+        if output.strip():
+            return cluster, output.strip()
+    return None, None
+
+
+def _all_slurm_jobs():
+    """List of (cluster, job_name, slurm_id, state) across all headnodes."""
+    jobs = []
+    for cluster in _slurm_config()["headnodes"]:
+        output = _capture(cluster, "squeue --me --noheader --format='%j|%i|%T'")
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            job_name, job_id, job_state = line.split("|")
+            jobs.append((cluster, job_name, job_id, job_state))
+    return jobs
+
+
+def _watch_by_tag(tags, selection: str) -> None:
+    repository = r3.Repository(os.environ["R3_REPOSITORY"])
+    last_state = None
+    last_state_change = datetime.now()
+    while True:
+        jobs = repository.find(query={"tags": {"$all": list(tags)}})
+        if not jobs:
+            if last_state != "no_jobs_found":
+                last_state = "no_jobs_found"
+                last_state_change = datetime.now()
+            print(f"No jobs found for {datetime.now() - last_state_change}\r", end="", flush=True)
+            sleep(10)
+            continue
+
+        print(f"found {len(jobs)} matching r3 jobs")
+        if selection == "oldest":
+            job = jobs[0]
+        elif selection == "newest":
+            job = jobs[-1]
+        elif selection in ("oldest-running-job", "newest-running-job"):
+            cluster_jobs = sorted(_all_slurm_jobs(), key=lambda x: int(x[2]))
+            if selection == "newest-running-job":
+                cluster_jobs = list(reversed(cluster_jobs))
+            by_id = {job.id: job for job in jobs}
+            matching = [e for e in cluster_jobs if e[1] in by_id]
+            print(f"found ({len(matching)}) jobs in clusters")
+            running = [e for e in matching if e[-1] == "RUNNING"]
+            print(f"found ({len(running)}) running jobs in clusters")
+            if not running:
+                sleep(10)
+                continue
+            job = by_id[running[0][1]]
+        else:
+            raise click.ClickException("Invalid selection.")
+
+        print(f"Attaching to job {job.id}...")
+        for tag in job.metadata["tags"]:
+            print(f"- {tag}")
+        sleep(5)
+        cluster, slurm_id = _find_slurm_job(job.id)
+        if cluster is None:
+            if last_state != "job_not_in_queue":
+                last_state = "job_not_in_queue"
+                last_state_change = datetime.now()
+            print(f"Job not found in queue for {datetime.now() - last_state_change}\r", end="", flush=True)
+            sleep(10)
+            continue
+        if last_state != "jobs_in_queue":
+            last_state = "jobs_in_queue"
+            last_state_change = datetime.now()
+
+        print(f"Attaching to job {slurm_id} on {cluster}...")
+        try:
+            _sattach_wait(slurm_id, cluster=None)
+        except ExternalCommandFailed:
+            print("sattach failed")
+        sleep(10)
+
+
 @click.group()
 def cli():
     pass
@@ -343,6 +426,29 @@ def status(summary, details, tags):
             jid = item["cluster_job_id"] or ""
             cstate = item["cluster_state"] or ""
             print(f"{item['job_name']}: {item['job_state']} {jid} {cstate}")
+
+
+@cli.command()
+@click.argument("job_name_or_id", required=False)
+@click.option("--tag", "-t", "tags", multiple=True, type=str,
+              help="Watch by r3 tag ($all) instead of a job name/id.")
+@click.option("--newest", "selection", flag_value="newest", default=True)
+@click.option("--oldest", "selection", flag_value="oldest")
+@click.option("--oldest-running-job", "selection", flag_value="oldest-running-job")
+@click.option("--newest-running-job", "selection", flag_value="newest-running-job")
+def watch(job_name_or_id, tags, selection):
+    """Attach to a SLURM job by name/id, or by r3 --tag selection.
+
+    Compose with xr3: `xr3-slurm watch $(xr3 history --latest --id .)`.
+    """
+    if job_name_or_id and tags:
+        raise click.ClickException("Give either a job name/id or --tag, not both.")
+    if job_name_or_id:
+        _sattach_wait(job_name_or_id, cluster=None)
+    elif tags:
+        _watch_by_tag(tags, selection)
+    else:
+        raise click.ClickException("Give a job name/id or --tag.")
 
 
 if __name__ == "__main__":
