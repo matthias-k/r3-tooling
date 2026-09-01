@@ -53,6 +53,104 @@ def _build_query(tags, queries) -> dict:
     return query
 
 
+def _run(cluster: Optional[str], command: str, **kwargs):
+    """RemoteCommand if a cluster host is given, else a local ExternalCommand."""
+    if cluster:
+        return RemoteCommand(cluster, command, **kwargs)
+    return ExternalCommand(command, **kwargs)
+
+
+def _capture(cluster: Optional[str], command: str) -> str:
+    cmd = _run(cluster, command, capture=True)
+    cmd.start()
+    return cmd.output
+
+
+def _get_job_id(job_name: str, cluster: Optional[str]) -> str:
+    """Newest/highest-priority slurm job id for a job name (was sattachx_wait)."""
+    # Sort so the first row is the job to attach to: -t (state desc: running first),
+    # -M (time used desc: longest-running first), -p (priority desc: else highest-priority pending).
+    output = _capture(
+        cluster,
+        f"squeue --me --sort=-t,-M,-p --format=%i --noheader --name={job_name}",
+    )
+    return output.strip().split("\n")[0]
+
+
+def _get_job_state(job_id: str, cluster: Optional[str]) -> str:
+    """squeue state, or 'RUNNING.<step>' while running ('RUNNING.None' until a step exists)."""
+    state = _capture(
+        cluster, f'squeue --jobs={job_id} --noheader --format="%T"'
+    ).strip()
+    if state == "RUNNING":
+        sacct = _capture(cluster, f"sacct -j {job_id} -P")
+        return f"RUNNING.{xr3slurmlib.parse_running_step(sacct)}"
+    return state
+
+
+def _sattach(job_id: str, cluster: Optional[str]) -> None:
+    """Attach to the running step of a job id (was the sattachx bash script)."""
+    sacct = _capture(cluster, f"sacct -j {job_id}")
+    step = xr3slurmlib.parse_sattach_step(sacct)
+    if step is None:
+        print(f"No step to attach for job {job_id}")
+        return
+    print(f"attaching to {step}")
+    time.sleep(1)
+    _run(cluster, f"sattach {step}").start()
+
+
+def _sattach_wait(job_name_or_id: str, cluster: Optional[str] = None) -> None:
+    """Poll a job (by numeric id or name) and attach once a step is RUNNING.
+
+    Absorbs sattachx_wait: if given a name, resolve the id and keep re-resolving
+    when the queued job changes; attach via _sattach when a step appears.
+    """
+    try:
+        int(job_name_or_id)
+        job_name = None
+        job_id = job_name_or_id
+    except ValueError:
+        job_name = job_name_or_id
+        job_id = _get_job_id(job_name, cluster)
+
+    job_state = None
+    last_state_change = datetime.utcnow()
+    while True:
+        new_state = _get_job_state(job_id, cluster) if job_id else ""
+        if new_state != job_state:
+            if job_state is not None:
+                print()
+            if job_id:
+                print(f"job {job_id} is {new_state}", end="", flush=True)
+                if job_name is None and new_state == "":
+                    print("\nJob not existing anymore, quitting")
+                    return
+            else:
+                print(f"Waiting for job {job_name} to appear", end="", flush=True)
+            job_state = new_state
+            last_state_change = datetime.utcnow()
+        else:
+            elapsed = str(datetime.utcnow() - last_state_change).split(".", 1)[0]
+            if job_id:
+                print(f"\rjob {job_id} is {new_state} since {elapsed}", end="", flush=True)
+            else:
+                print(f"\rWaiting for job {job_name} to appear since {elapsed}", end="", flush=True)
+
+        if job_state.startswith("RUNNING"):
+            _, step_no = job_state.split(".")
+            if step_no != "None":
+                _sattach(job_id, cluster)
+        elif job_name is not None or not job_id:
+            new_job_id = _get_job_id(job_name, cluster)
+            if new_job_id != job_id:
+                print(f"\nswitching to monitoring job {new_job_id}")
+                job_id = new_job_id
+                job_state = None
+
+        sleep(10)
+
+
 @click.group()
 def cli():
     pass
