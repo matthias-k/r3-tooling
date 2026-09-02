@@ -6,8 +6,7 @@ Resume state for the xr3 extraction/cleanup work. Read this first after a contex
 
 - **Branch:** `xr3-extraction` (in `tools/r3-tooling`). **Kept open** — the user chose NOT to merge
   to `main` per-phase; do not merge without asking.
-- **Done:** Phases 0, 1, 2, 3 (lean), **4 (xr3-slurm extraction — complete)**. **Next:** Phase 5 (move
-  `run_job_locally`; decide on further internal split), then Phase 6 (docs / CONTRACT.md).
+- **Done:** Phases 0, 1, 2, 3 (lean), **4 (xr3-slurm extraction)**, **5 (run_job_locally placement + `xr3diff.py` extraction)**. **Next:** Phase 6 (docs / CONTRACT.md).
 - **Execution mode:** subagent-driven-development (fresh subagent per task, controller verifies,
   final independent review on the larger phases). Commit trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
@@ -25,6 +24,22 @@ lives in `xr3config.DEFAULTS["slurm"]` (`headnodes`/`submit_host`/`exclude_nodes
 dev fixture `dev/xr3.config.local.yaml` carries real galvani values. 17/17 unit tests pass. `xr3` is
 now 1440 lines (was 1830). **Env note:** live SSH-to-galvani (submit-non-dry/status/watch polling)
 is UNREACHABLE from this container — verified by `--dry`/`--help`/golden instead.
+
+### Phase 5 result (commit `7ebfff7`)
+
+`run_job_locally` was already at its spec-final home `extensions/scripts/` (standalone bash, executable) —
+folding it into `xr3-slurm` stays a roadmap item ("do not reimplement"). The user chose **"extract
+`diff.py` only"** for the module split (not the full core/pathmap/cli fragmentation). The ~700-line diff
+engine (14 functions: `_get_color_arg`/`_pager_context`/`_get_changed_files`/`_diff_*`/`_categorize_changes`/
+`_get_resolved_config`/`_print_*`/`_interactive_diff`/`compare_directories`) moved verbatim into
+`extensions/xr3/xr3diff.py` (664 lines, self-contained, pathmap-free); the `diff` command stays in `xr3`
+(needs pathmap for default-target resolution) and calls `xr3diff.*`. `xr3` is now **789 lines** (was 1440).
+Verified by AST byte-comparison (verbatim move) + TWO gates: the standard golden (`ALL DATA COMMANDS
+IDENTICAL`) AND a new diff-command characterization (5 modes + help) captured pre-change. Caveat: the
+`diff` characterization touches the network (`git ls-remote origin dev` for a `find_latest: branch: dev`
+dep) and the container's outbound net is flaky — network-only diff lines that flip between runs of the
+same binary are noise, not regressions (`--stat`/`--name-only`/`--help` are network-free and were exactly
+identical). Further core/pathmap/cli split was NOT done (YAGNI, per user).
 
 **Deferred from Phase 4 (accepted, not bugs)** — for later if wanted: `_running_jobs_by_name`/
 `_all_slurm_jobs` near-duplication (predates extraction); the 3x debounce-timer idiom in
