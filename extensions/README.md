@@ -17,7 +17,8 @@ pure skill stays upstream-ready.
 - **`scripts/run_job_locally`** — run a job's `run.sh` inside an interactive SLURM allocation (uses the
   scratch dir).
 - **[`CONTRACT.md`](CONTRACT.md)** — the assumptions the tools place on jobs.
-- **`research-workflow-additions.md`** — house conventions to fold into `RESEARCH_WORKFLOW.md`.
+- house conventions to fold into `RESEARCH_WORKFLOW.md` are a planned addition, not yet vendored here —
+  see [`../docs/ideas/research-workflow-additions.md`](../docs/ideas/research-workflow-additions.md) (`ROADMAP.md`).
 
 The two tools share one config file (`~/.config/xr3.yaml`, or `$XR3_CONFIG`); each reads only its own
 sections. Copy [`xr3/xr3.example.yaml`](xr3/xr3.example.yaml) to start.

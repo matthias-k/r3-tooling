@@ -38,7 +38,7 @@ Net goal: `projects/CLAUDE.md` and `RESEARCH_WORKFLOW.md` shrink toward thin poi
 
 - **`skills/r3/`** — the working model (SKILL.md + `reference/` files + validity stamp).
 - **`extensions/CONTRACT.md`**, **`extensions/xr3/README.md`**, **`extensions/xr3-slurm/README.md`** — the reference the skill points at.
-- **`extensions/research-workflow-additions.md`** — house conventions (metadata schema, job archetypes, the checkout-omits-metadata hazard, what `check` enforces).
+- **`docs/ideas/research-workflow-additions.md`** (sibling here) — house conventions (metadata schema, job archetypes, the checkout-omits-metadata hazard, what `check` enforces).
 - **`research/docs/RESEARCH_WORKFLOW.md`** — the house workflow to fold in / re-home.
 - **`docs/specs/2026-08-22-xr3-extraction-design.md`** §9 (documentation plan) and §10 (roadmap).
 

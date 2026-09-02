@@ -377,7 +377,7 @@ overlook, separate from the *pitch* (what they add over bare r3).
    top/extensions README signposts, the `CLAUDE.md` pointer, and the
    help-epilog/gating doc pointers; then update
    `research/docs/RESEARCH_WORKFLOW.md`, `projects/CLAUDE.md` (removed/moved/
-   renamed commands), and `extensions/research-workflow-additions.md` to link the
+   renamed commands), and `docs/ideas/research-workflow-additions.md` to link the
    contract and match the new tools, commands, config, and composition patterns.
 
 ## 12. Out of scope

@@ -17,10 +17,13 @@ live in the linked docs (this file is the map, not the spec).
    on r3/xr3 work, so the house workflow surfaces without agents having to read a doc, and
    `projects/CLAUDE.md` / `RESEARCH_WORKFLOW.md` shrink to thin pointers. Kickoff brief:
    **[`docs/ideas/xr3-skill.md`](docs/ideas/xr3-skill.md)**.
-2. **Integrate `RESEARCH_WORKFLOW.md` into r3-tooling** — re-home the research-workflow doc
+2. **Integrate `RESEARCH_WORKFLOW.md` into r3-tooling** *(high value — these are real additions
+   the house workflow is still missing, not just a re-home)*. Re-home the research-workflow doc
    here (its r3-mechanics slices → the pure `skills/r3/`; its house-convention slices → the
-   extensions / the xr3 skill), per design spec §5/§9. Do *after* (or with) the xr3 skill so
-   the consolidation happens once. Source notes: `extensions/research-workflow-additions.md`.
+   extensions / the xr3 skill), per design spec §5/§9, **folding in the conventions collected in
+   [`docs/ideas/research-workflow-additions.md`](docs/ideas/research-workflow-additions.md)** (metadata
+   schema, job archetypes, the checkout-omits-metadata hazard, what `check` enforces). Do *after* (or
+   with) the xr3 skill so the consolidation happens once.
 3. **`examples/`** — turn the `auto_submit.py` / `setup_tasks.py` family (which still call the
    now-obsolete monolith) into documented, adaptable templates colleagues can copy, and
    repoint them at `xr3` / `xr3-slurm`. Spec §10.

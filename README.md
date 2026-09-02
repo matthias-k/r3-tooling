@@ -53,12 +53,13 @@ What's next (the `xr3` skill, folding in `RESEARCH_WORKFLOW.md`, `examples/`) is
 
 **Use-facing:**
 - `skills/r3/` — **the pure r3 skill** (install this).
-- `extensions/` — the **`xr3` / `xr3-slurm`** tool suite, `CONTRACT.md`, and house conventions
-  (`research-workflow-additions.md`).
+- `extensions/` — the **`xr3` / `xr3-slurm`** tool suite, `CONTRACT.md`, and house conventions.
 
 **Build provenance / maintenance** (not needed to *use* the skill):
 - `docs/specs/` — the design spec · `docs/superpowers/plans/` — the build plan.
 - `docs/r3-upstream-doc-issues.md` — doc/code fixes to make in the r3 repo upstream.
+- `docs/ideas/` — rough thoughts / planned additions not yet folded in (the `xr3` skill; the
+  `research-workflow-additions.md` conventions to migrate). Indexed and prioritized in `ROADMAP.md`.
 - `raw-material/r3-findings.md` — the **verified mined knowledge base** the skill was authored from
   (dense working material; kept for re-verifying the skill against future r3 versions).
 
