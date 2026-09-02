@@ -47,6 +47,7 @@ conventions, SLURM config, …). Those, and what breaks without them, are the si
 **[`extensions/CONTRACT.md`](extensions/CONTRACT.md)** — read it before pointing the tools at your jobs.
 
 To install the CLI tools (the Python env, the `PATH` wrappers, and the config), see **[`SETUP.md`](SETUP.md)**.
+What's next (the `xr3` skill, folding in `RESEARCH_WORKFLOW.md`, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
 
 ## Layout
 
