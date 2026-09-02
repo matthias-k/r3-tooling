@@ -13,9 +13,11 @@ itself — only by these tools.
 
 ## Always required (nearly every command)
 
-- **`R3_REPOSITORY` points at your r3 repo.** Set the env var (or pass `--repository`/`REPOSITORY_PATH`
-  where a command accepts it). *Breaks:* `find`, `history`, `check`, `commit`, and all of `xr3-slurm` error
-  out without it.
+- **`R3_REPOSITORY` points at your r3 repo.** Set the env var (some commands also accept `--repository` or
+  a `REPOSITORY_PATH` argument). Nearly everything needs it: all of `xr3` except `files`, and `xr3-slurm`
+  `submit`/`status`/`watch --tag` — the one exception is plain `xr3-slurm watch <name/id>`, which talks only
+  to SLURM. *Breaks:* the command errors without it — `dev-checkout`/`dev-cleanup`/`git-check` with a clean
+  "Missing argument 'REPOSITORY_PATH'", the rest (including `diff`, `find`, `check`) with a raw traceback.
 - **Python 3 + runtime deps on `PYTHONPATH`.** `xr3` needs `click`, `pyyaml`, `r3`, `executor`; `xr3-slurm`
   additionally needs `tqdm`. *Breaks:* `ImportError` at startup. (Both tools are single-file scripts run
   through your r3 Python environment.)
@@ -25,13 +27,16 @@ itself — only by these tools.
 - **Your working directory maps to an r3 logical path.** These commands derive the job's r3 path from
   *where the working directory lives on disk*, via **pathmap roots** you configure (see
   [xr3 config](xr3/README.md)). Put your project roots in `~/.config/xr3.yaml` (or `$XR3_CONFIG`).
-  *Breaks:* the command exits with a "configure a pathmap root … see CONTRACT.md" error. (`find` and
-  `files` do **not** need pathmap.)
+  *Breaks:* the command exits with a `No pathmap root matches <path> … (see CONTRACT.md)` error. (`find` and
+  `files` do **not** need pathmap. Also skip it: `diff --compare-to <id>` compares two committed jobs
+  directly, and `commit --no-check` skips the check that resolves the path.)
 - **`metadata.path` matches the job's logical location**, and **`tags[0]` = `<path>/vX.Y.Z`** (the primary
   version tag is the path plus a semver). *Breaks:* `xr3 check` fails its path- and tag-consistency asserts
   (and `commit` runs `check` by default).
-- **No `bug/…`-tagged dependencies and no non-empty `metadata.WIP`** (both configurable via the `blockers`
-  config). *Breaks:* `check`/`dev-checkout` refuse the job.
+- **No `bug/…`-tagged dependencies** (configurable via `blockers.tags`). *Breaks:* `check` and
+  `dev-checkout` refuse the job (`dev-checkout --allow-bugs` overrides).
+- **No non-empty `metadata.WIP`** (toggle with `blockers.block_on_wip`). *Breaks:* `check` fails — and
+  `commit`, which runs `check` by default. (`dev-checkout` does *not* check WIP.)
 
 > Roadmap: `history`/`diff` could instead read `metadata.path` straight from the working dir and skip
 > pathmap entirely — see the design spec §10. Until then, they need a pathmap root.

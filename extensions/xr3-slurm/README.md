@@ -49,8 +49,8 @@ done state. See [../CONTRACT.md](../CONTRACT.md).
 
 ## Invocation
 
-Runs through your r3 Python environment (imports `r3`/`executor`/`tqdm`); needs `R3_REPOSITORY`. Put it on
-your `PATH` like `xr3`.
+Runs through your r3 Python environment (imports `r3`/`executor`/`tqdm`); `submit`/`status`/`watch --tag`
+need `R3_REPOSITORY` (plain `watch <name/id>` talks only to SLURM). Put it on your `PATH` like `xr3`.
 
 ## Roadmap
 
