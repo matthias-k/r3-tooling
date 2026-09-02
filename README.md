@@ -46,6 +46,8 @@ Vendored in [`extensions/`](extensions/README.md):
 conventions, SLURM config, …). Those, and what breaks without them, are the single source of truth in
 **[`extensions/CONTRACT.md`](extensions/CONTRACT.md)** — read it before pointing the tools at your jobs.
 
+To install the CLI tools (the Python env, the `PATH` wrappers, and the config), see **[`SETUP.md`](SETUP.md)**.
+
 ## Layout
 
 **Use-facing:**

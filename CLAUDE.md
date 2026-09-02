@@ -7,7 +7,11 @@ design — **start there.**
 Extensions (`extensions/`): the `xr3` (cluster-agnostic) / `xr3-slurm` (MLCloud SLURM)
 tool suite. Before using or documenting them, read **`extensions/CONTRACT.md`** — the
 single source of truth for the assumptions they place on r3 jobs — plus the per-tool
-READMEs. The `xr3-slurm` extraction design is `docs/specs/2026-08-22-xr3-extraction-design.md`.
+READMEs. Setup (env, PATH wrappers, config) is in **`SETUP.md`**. The `xr3-slurm`
+extraction design is `docs/specs/2026-08-22-xr3-extraction-design.md`.
+
+Invocation: `r3` / `xr3` / `xr3-slurm` are wrapper scripts in `$LUSTREWORK/bin` (on PATH),
+so they run in any shell, subprocess, or subagent — no conda/PYTHONPATH discovery needed.
 
 Two rules for any work in `skills/r3/`:
 
