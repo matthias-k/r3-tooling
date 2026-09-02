@@ -6,7 +6,9 @@ Resume state for the xr3 extraction/cleanup work. Read this first after a contex
 
 - **Branch:** `xr3-extraction` (in `tools/r3-tooling`). **Kept open** — the user chose NOT to merge
   to `main` per-phase; do not merge without asking.
-- **Done:** Phases 0, 1, 2, 3 (lean), **4 (xr3-slurm extraction)**, **5 (run_job_locally placement + `xr3diff.py` extraction)**. **Next:** Phase 6 (docs / CONTRACT.md).
+- **Done:** Phases 0, 1, 2, 3 (lean), **4 (xr3-slurm extraction)**, **5 (run_job_locally + `xr3diff.py`)**,
+  **6 (docs — in-repo)**. **Remaining:** out-of-repo doc updates at *tool-adoption* time (see below); then
+  the branch is ready for the user's merge/adopt decision.
 - **Execution mode:** subagent-driven-development (fresh subagent per task, controller verifies,
   final independent review on the larger phases). Commit trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
@@ -40,6 +42,28 @@ IDENTICAL`) AND a new diff-command characterization (5 modes + help) captured pr
 dep) and the container's outbound net is flaky — network-only diff lines that flip between runs of the
 same binary are noise, not regressions (`--stat`/`--name-only`/`--help` are network-free and were exactly
 identical). Further core/pathmap/cli split was NOT done (YAGNI, per user).
+
+### Phase 6 result (commits `2e41ff5`, `cfb9767`)
+
+In-repo docs written + fact-checked against the live tools: **`extensions/CONTRACT.md`** (single source of
+truth for the assumptions the tools place on jobs — `R3_REPOSITORY`, pathmap, `output/done`, `tags[0]`/
+`metadata.path`, SLURM config, GNU `diff`, scratch dir; each with "what breaks"), per-tool
+**`xr3/README.md`** + **`xr3-slurm/README.md`** ("what this adds over bare r3" + config, linking CONTRACT),
+and signpost updates to `extensions/README.md`, top `README.md`, `CLAUDE.md`, `research-workflow-additions.md`.
+A fact-check subagent verified every flag/config/link against `--help`/code and caught real CONTRACT errors
+(fixed in `cfb9767`): R3_REPOSITORY scope, WIP-vs-dev-checkout, pathmap `--compare-to`/`--no-check` exceptions.
+
+**Out-of-repo docs — DEFERRED to tool-adoption time (NOT done, deliberately):** `projects/CLAUDE.md`
+(lines ~49-53 still document the monolith's `submit location`/`status`/`watch`/`bugmark`) and
+`research/docs/RESEARCH_WORKFLOW.md` (add a CONTRACT.md pointer). These describe the user's *currently
+installed* xr3 monolith (`research/tools/scripts/xr3`); rewriting them to reference `xr3-slurm` etc. is
+premature until the suite is actually installed/adopted. Do at adoption.
+
+**Two config decisions left as-is (YAGNI; flag if the user wants otherwise):** (a) `xr3.example.yaml`'s
+`slurm:` uses real `galvani` (correct value for the MLCloud target audience, not a private placeholder);
+(b) `slurm` config ships non-null galvani defaults, so a config-less MLCloud user works out-of-the-box but a
+non-MLCloud user gets an SSH error rather than the spec §7 "actionable hint" — acceptable since xr3-slurm is
+explicitly MLCloud-specific (spec §10 YAGNI). CONTRACT.md documents the MLCloud-specificity.
 
 **Deferred from Phase 4 (accepted, not bugs)** — for later if wanted: `_running_jobs_by_name`/
 `_all_slurm_jobs` near-duplication (predates extraction); the 3x debounce-timer idiom in
