@@ -4,6 +4,11 @@ Pure, upstream-ready r3 skill (`skills/r3/`) + MK's extensions (`extensions/`).
 See `README.md` for layout and `docs/specs/2026-08-15-r3-skill-design.md` for the
 design — **start there.**
 
+Extensions (`extensions/`): the `xr3` (cluster-agnostic) / `xr3-slurm` (MLCloud SLURM)
+tool suite. Before using or documenting them, read **`extensions/CONTRACT.md`** — the
+single source of truth for the assumptions they place on r3 jobs — plus the per-tool
+READMEs. The `xr3-slurm` extraction design is `docs/specs/2026-08-22-xr3-extraction-design.md`.
+
 Two rules for any work in `skills/r3/`:
 
 1. **Keep the pure/extension seam.** `skills/r3/` describes *only vanilla r3* — never

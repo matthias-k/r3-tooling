@@ -1,0 +1,789 @@
+from dataclasses import dataclass, field
+import json
+import os
+import re
+import shutil
+import sys
+from typing import Iterable, List, Optional
+from pathlib import Path
+
+import yaml
+import click
+import r3
+from executor import ExternalCommandFailed, execute
+
+import functools
+import xr3config
+import xr3diff
+import xr3pathmap
+
+
+@dataclass
+class GitCheckResult:
+    """Result of checking a single git dependency for uncommitted/unpushed changes."""
+    dependency: r3.GitDependency
+    path: Path
+    is_checked_out: bool = False
+    has_staged: bool = False
+    has_unstaged: bool = False
+    has_untracked: bool = False
+    current_commit: Optional[str] = None
+    expected_commit: Optional[str] = None
+    is_clean: bool = True
+    issues: List[str] = field(default_factory=list)
+
+
+def _check_git_dependency(
+    dependency: r3.GitDependency,
+    job_path: Path,
+    repository: r3.Repository,
+) -> GitCheckResult:
+    """Check a single git dependency for uncommitted or unpushed changes."""
+    checkout_path = job_path / dependency.destination
+    result = GitCheckResult(dependency=dependency, path=checkout_path)
+
+    # Check if path exists and is a real checkout (not symlink)
+    if not checkout_path.exists():
+        return result
+
+    if checkout_path.is_symlink():
+        return result
+
+    # At this point we have a real directory - mark as checked out
+    result.is_checked_out = True
+
+    # Verify it's a git repository - if not, that's unexpected and we should warn
+    git_dir = checkout_path / ".git"
+    if not git_dir.exists():
+        result.issues.append("Directory exists but is not a git repository (missing .git)")
+        result.is_clean = False
+        return result
+
+    # Check working directory state with git status --porcelain
+    try:
+        status_output = execute(
+            "git status --porcelain",
+            directory=checkout_path,
+            capture=True
+        )
+    except ExternalCommandFailed:
+        result.issues.append("Failed to get git status")
+        result.is_clean = False
+        return result
+
+    if status_output and status_output.strip():
+        for line in status_output.strip().split('\n'):
+            if not line:
+                continue
+            status_code = line[:2]
+            if status_code == '??':
+                result.has_untracked = True
+            else:
+                if status_code[0] != ' ':
+                    result.has_staged = True
+                if status_code[1] != ' ' and status_code[1] != '?':
+                    result.has_unstaged = True
+
+    # Get current HEAD commit
+    try:
+        current_commit = execute(
+            "git rev-parse HEAD",
+            directory=checkout_path,
+            capture=True
+        )
+        result.current_commit = current_commit.strip() if current_commit else None
+    except ExternalCommandFailed:
+        result.issues.append("Failed to get current HEAD commit")
+        result.is_clean = False
+
+    # Get expected commit from r3 repository
+    try:
+        resolved_dependency = repository._resolve_git_dependency(dependency)
+        result.expected_commit = resolved_dependency.commit
+    except Exception as e:
+        result.issues.append(f"Failed to resolve expected commit: {e}")
+        result.is_clean = False
+
+    # Build issues list
+    if result.has_staged:
+        result.issues.append("Has staged changes (not committed)")
+        result.is_clean = False
+
+    if result.has_unstaged:
+        result.issues.append("Has unstaged changes (modified files)")
+        result.is_clean = False
+
+    if result.has_untracked:
+        result.issues.append("Has untracked files")
+        result.is_clean = False
+
+    if result.current_commit and result.expected_commit:
+        if result.current_commit != result.expected_commit:
+            result.issues.append(
+                f"HEAD ({result.current_commit[:8]}) differs from expected "
+                f"({result.expected_commit[:8]}). Changes may not be pushed to upstream."
+            )
+            result.is_clean = False
+
+    return result
+
+
+def _check_git_dependencies(
+    job: r3.Job,
+    job_path: Path,
+    repository: r3.Repository,
+) -> tuple[bool, List[GitCheckResult]]:
+    """
+    Check all git dependencies for uncommitted/unpushed changes.
+
+    Returns:
+        Tuple of (all_clean, results) where all_clean is True if no issues found.
+    """
+    results = []
+    all_clean = True
+
+    for dependency in job.dependencies:
+        if not isinstance(dependency, r3.GitDependency):
+            continue
+
+        result = _check_git_dependency(dependency, job_path, repository)
+        results.append(result)
+
+        if result.is_checked_out and not result.is_clean:
+            all_clean = False
+
+    return all_clean, results
+
+
+def _format_git_check_results(
+    results: List[GitCheckResult],
+    verbose: bool = False
+) -> None:
+    """Print formatted output of git dependency check results."""
+    checked_out_results = [r for r in results if r.is_checked_out]
+
+    if not checked_out_results:
+        print("No git dependencies are checked out locally.")
+        return
+
+    print(f"Checked {len(checked_out_results)} git dependencies:")
+    print()
+
+    for result in checked_out_results:
+        status_icon = "OK" if result.is_clean else "WARN"
+        print(f"  [{status_icon}] {result.dependency.destination}")
+
+        if not result.is_clean:
+            for issue in result.issues:
+                print(f"       - {issue}")
+
+            # Provide actionable advice
+            if result.has_staged or result.has_unstaged:
+                print(f"       Action: Commit your changes in {result.path}")
+            if result.current_commit and result.expected_commit and result.current_commit != result.expected_commit:
+                print("       Action: Push your changes to upstream (not origin)")
+
+        if verbose:
+            print(f"       Current commit: {result.current_commit or 'unknown'}")
+            print(f"       Expected commit: {result.expected_commit or 'unknown'}")
+
+        print()
+
+
+@click.group()
+def cli():
+    pass
+
+@cli.command()
+#@click.option("--tag", "-t", "tags", multiple=True, type=str)
+#@click.option("--origin', '-o', default=None", type=str)
+@click.option("--latest/--all", default=False)
+@click.option("--long/--short", "-l", default=False)
+@click.option("--id", "id_only", is_flag=True, default=False,
+              help="Print only the job id (one per line) — composes into xr3-slurm.")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument(
+    "repository_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    envvar="R3_REPOSITORY",
+)
+def history(latest: bool, long: bool, id_only: bool, path: Path, repository_path: Path) -> None:
+    results = _history(latest, path, repository_path)
+    if id_only:
+        for job in results:
+            print(job.id)
+        return
+    # history is scoped to a single metadata.path, so print it once as a header
+    # (in --long) rather than repeating it on every row like `find` does.
+    if long and results:
+        print(results[0].metadata.get("path", ""))
+    for job in results:
+        if long:
+            datetime_str = job.timestamp.strftime(r"%Y-%m-%d %H:%M:%S")
+            tags = " ".join(f"#{tag}" for tag in job.metadata.get("tags", []))
+            print(f"  {job.id} | {datetime_str} | {tags}")
+        else:
+            print(job.path)
+
+
+@cli.command()
+@click.option(
+    "--tag", "-t", "tags", multiple=True, type=str,
+    help="Only list jobs containing all of the given tags (repeatable).",
+)
+@click.option(
+    "--path", "-p", "path_glob", type=str, default=None,
+    help="Match metadata.path against this GLOB pattern. Literal: add * yourself "
+         "for substring/prefix matches (e.g. '*Saliency*', 'research/experiments/*'). "
+         "(SQLite GLOB: * ? [...] are wildcards)",
+)
+@click.option(
+    "--query", "-q", "queries", multiple=True, type=str,
+    help="Arbitrary Mongo-style query as JSON, e.g. '\"tags\": {\"$all\": [\"research\"]}'. "
+         "Repeatable; merged into the query (later keys win).",
+)
+@click.option(
+    "--latest/--all", default=False,
+    help="Return only the single most recently created job among the matches "
+         "(--latest), or all matches (--all, default).",
+)
+@click.option(
+    "--long/--short", "-l", default=False,
+    help="Long output: 'id | datetime | path [| tags]' instead of just the job id.",
+)
+@click.option(
+    "--tags/--no-tags", "show_tags", default=True,
+    help="Include the tags column in --long output (default: on). Handy since "
+         "--path already shows where each job lives.",
+)
+@click.option(
+    "--repository", "repository_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    envvar="R3_REPOSITORY",
+)
+def find(tags: Iterable[str], path_glob: Optional[str], queries: Iterable[str], latest: bool, long: bool, show_tags: bool, repository_path: Path) -> None:
+    """Search the R3 repository for jobs (wraps repository.find).
+
+    Combines --tag (tags $all), --path (metadata.path GLOB), and --query (arbitrary
+    JSON) into one AND-ed query. With no options, lists every job.
+    """
+    repository = r3.Repository(repository_path)
+    query = _build_query(tags, queries, path_glob=path_glob)
+    for job in repository.find(query, latest):
+        if long:
+            assert job.timestamp is not None
+            datetime_str = job.timestamp.strftime(r"%Y-%m-%d %H:%M:%S")
+            path = job.metadata.get("path", "")
+            line = f"{job.id} | {datetime_str} | {path}"
+            if show_tags:
+                tags_str = " ".join(f"#{tag}" for tag in job.metadata.get("tags", []))
+                line += f" | {tags_str}"
+            print(line)
+        else:
+            print(job.id)
+
+
+def _history(latest: bool, path: Path, repository_path: Path) -> list[r3.Job]:
+    repository = r3.Repository(repository_path)
+    results = []
+
+    origin = _get_path(path)
+
+    # print("origin", origin)
+
+    results = repository.find({
+        "path": origin
+    }, latest=latest)
+
+    if not latest:
+    #    results = [max(results, key=lambda job: job.datetime)]
+    #else:
+        results = sorted(results, key=lambda job: job.timestamp)
+
+    return results
+
+@functools.lru_cache(maxsize=1)
+def _config():
+    return xr3config.load_config()
+
+
+def _get_path(path: Path) -> str:
+    """Map a working-directory path to its r3 logical path (from config)."""
+    try:
+        return xr3pathmap.resolve_job_path(
+            Path(path), _config(), config_source=str(xr3config.config_path())
+        )
+    except xr3pathmap.PathmapError as e:
+        raise click.ClickException(str(e))
+
+
+def _build_query(tags, queries, path_glob=None) -> dict:
+    """Build a Mongo-style query dict from tag/path/query CLI options.
+
+    - tags: iterable of tag strings -> {"tags": {"$all": [...]}} (omitted if empty)
+    - path_glob: literal GLOB pattern for metadata.path -> {"path": {"$glob": ...}}
+    - queries: iterable of JSON fragments; bare `key: value` is wrapped in {...},
+      parsed, and merged in. Later keys win (last-writer-wins).
+    """
+    query: dict = {}
+    if tags:
+        query["tags"] = {"$all": list(tags)}
+    if path_glob is not None:
+        query["path"] = {"$glob": path_glob}
+    for q in queries:
+        if not q.startswith("{"):
+            q = f"{{{q}}}"
+        query_data = json.loads(q)
+        if not isinstance(query_data, dict):
+            raise ValueError(f"Query must be a JSON object, got {query_data}")
+        query.update(query_data)
+    return query
+
+
+@cli.command()
+@click.option(
+    "--repository",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    envvar="R3_REPOSITORY",
+)
+@click.option('--check-git/--no-check-git', default=True,
+              help="Check git dependencies for uncommitted/unpushed changes")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path), default=Path.cwd())
+def check(path: Path, repository: Path, check_git: bool) -> None:
+    correct = _check_job(path, repository, check_git=check_git)
+
+    sys.exit(0 if correct else 1)
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path), default=Path.cwd())
+def files(path: Path) -> None:
+    """List files that would be committed for the job at PATH."""
+    job = r3.Job(path)
+    for destination in sorted(job.files.keys()):
+        print(destination)
+
+
+def _check_job(path, repository, check_git: bool = True):
+    correct = True
+    repository: r3.Repository = r3.Repository(repository)
+    job: r3.Job = r3.Job(path)
+    job = repository.resolve(job)  # type: ignore
+    for dependency in job.dependencies:
+        if isinstance(dependency, r3.JobDependency):
+            depending_job = dependency.job
+
+            if not isinstance(depending_job, r3.Job):
+                depending_job = r3.Job(repository.path / "jobs" / depending_job)
+
+            for tag in depending_job.metadata.get("tags", []):
+                if any(tag.startswith(p) for p in _config()["blockers"]["tags"]):
+                    print(f"ERROR: Dependency {dependency} has bug tag '{tag}'.")
+                    correct = False
+        if dependency not in repository:
+            print(f"Error: Missing dependency: {dependency}")
+            print("destination:", dependency.destination)
+            correct = False
+
+
+    expected_path = _get_path(path)
+    if 'origin' in job.metadata and job.metadata['origin'] != expected_path:
+        print(f"ERROR: Origin mismatch)")
+        print(f"   {job.metadata['origin']}")
+        print(f"!= {expected_path}")
+        correct = False
+
+    if job.metadata['path'] != expected_path:
+        print(f"ERROR: Path mismatch)")
+        print(f"   {job.metadata['path']}")
+        print(f"!= {expected_path}")
+        correct = False
+
+
+    main_tag = job.metadata['tags'][0]
+    if not main_tag.startswith(expected_path):
+        main_tag_stem, main_tag_version = main_tag.rsplit('/', 1)
+
+        if not expected_path.endswith(main_tag_stem) or not main_tag_version.startswith('v'):
+            print(f"ERROR: Main Tag mismatching path")
+            print(f"   {main_tag}")
+            print(f"!= {expected_path}")
+            correct = False
+
+    wip_items = job.metadata.get("WIP", [])
+    if wip_items and _config()["blockers"]["block_on_wip"]:
+        print(f"Job has {len(wip_items)} WIP items:")
+        for item in wip_items:
+            print(f" - {item}")
+        correct = False
+
+    # Check git dependencies for uncommitted/unpushed changes
+    if check_git:
+        all_clean, results = _check_git_dependencies(job, Path(path), repository)
+        has_checked_out = any(r.is_checked_out for r in results)
+
+        if has_checked_out:
+            print()
+            print("Git dependency status:")
+            _format_git_check_results(results)
+
+            if not all_clean:
+                print("ERROR: Git dependencies have uncommitted or unpushed changes.")
+                correct = False
+
+    if correct:
+        print("All good.")
+    return correct
+
+
+@cli.command()
+@click.option('--color/--no-color', default=None,
+              help="Force color output on/off (default: auto-detect)")
+@click.option('--structured/--raw', 'structured', default=True,
+              help="Show structured output by category (default) or raw diff")
+@click.option('--resolved/--no-resolved', 'resolved', default=True,
+              help="Show resolved r3.yaml (commits/job IDs) instead of raw (default: resolved)")
+@click.option('--stat', 'stat', is_flag=True, default=False,
+              help="Show statistics (lines added/deleted per file)")
+@click.option('--name-only', 'name_only', is_flag=True, default=False,
+              help="Show only names of changed files")
+@click.option('-i', '--interactive', 'interactive', is_flag=True, default=False,
+              help="Interactive mode - select files to view")
+@click.option('--pager/--no-pager', 'use_pager', default=None,
+              help="Pipe output through pager (default: auto, enabled for TTY)")
+@click.option('--compare-to', 'compare_to', default=None,
+              help="Compare to a specific job ID instead of the latest committed version")
+@click.argument('path', type=click.Path(exists=True, file_okay=False, path_type=Path))
+def diff(color: Optional[bool], structured: bool, resolved: bool, stat: bool, name_only: bool, interactive: bool, use_pager: Optional[bool], compare_to: Optional[str], path: Path) -> None:
+    """Show the diff of the job at PATH compared to the latest committed version.
+
+    By default, compares against the latest committed version of the same job.
+    Use --compare-to to compare against a specific job ID.
+    """
+    path = path.resolve()
+    repository_path = Path(os.environ["R3_REPOSITORY"])
+
+    if compare_to:
+        # Compare to a specific job ID
+        compare_job_path = repository_path / "jobs" / compare_to
+        if not compare_job_path.exists():
+            print(f"Job not found: {compare_to}")
+            sys.exit(1)
+        previous_job_path = compare_job_path
+    else:
+        # Compare to the latest committed version
+        previous_job = _history(latest=True, path=path, repository_path=repository_path)
+        if not previous_job:
+            print(f"No previous job found for {path}.")
+            sys.exit(1)
+        previous_job, = previous_job
+        previous_job_path = previous_job.path
+
+    # Build list of paths to exclude: output, __pycache__, all dependency destinations,
+    # and anything listed under `ignore:` in r3.yaml
+    job = r3.Job(path)
+    exclude_patterns = ["output", "__pycache__"]
+    for dep in job.dependencies:
+        # Get the top-level directory of the destination
+        dest = str(dep.destination)
+        top_level = dest.split("/")[0] if "/" in dest else dest
+        if top_level not in exclude_patterns:
+            exclude_patterns.append(top_level)
+
+    # Patterns from r3.yaml `ignore:` are rooted at the job dir (e.g. "/report.html").
+    # `diff --exclude=` matches basenames, so strip the leading "/" and take the
+    # top-level component.
+    for ignore_pattern in job._config.get("ignore", []) or []:
+        stripped = ignore_pattern.lstrip("/")
+        top_level = stripped.split("/")[0] if "/" in stripped else stripped
+        if top_level and top_level not in exclude_patterns:
+            exclude_patterns.append(top_level)
+
+    # Get list of changed files (needed for all structured modes)
+    changes = xr3diff._get_changed_files(previous_job_path, path, exclude=exclude_patterns)
+
+    # Determine color setting before pager captures stdout
+    # If using pager and stdout is TTY, force colors on (pager will handle them)
+    is_tty = sys.stdout.isatty()
+    if color is None and is_tty:
+        color = True  # Force colors when outputting to TTY (pager preserves them with -R)
+
+    if interactive:
+        # Interactive mode - select files to view (no pager, has its own interaction)
+        xr3diff._interactive_diff(previous_job_path, path, changes, color=color)
+    else:
+        # Use pager for non-interactive output
+        with xr3diff._pager_context(use_pager):
+            if name_only:
+                # Show only file names
+                xr3diff._print_name_only(changes)
+            elif stat:
+                # Show statistics
+                xr3diff._print_stat(previous_job_path, path, changes)
+            elif structured:
+                # Structured diff output (default)
+                xr3diff._print_structured_diff(previous_job_path, path, changes, color=color,
+                                       resolved=resolved, repository_path=repository_path)
+            else:
+                # Raw diff output
+                xr3diff.compare_directories(previous_job_path, path, color=color, exclude=exclude_patterns)
+
+
+@cli.command()
+@click.option('-r', "--remove-previous/--no-remove-previous", default=False)
+@click.option("-c", "--copy-previous-output/--no-copy-previous-output", default=False)
+@click.option('-x', "--exclude-done/--no-exclude-done", default=False)
+@click.option('--check/--no-check', default=True, help="Check job (path metadata and buggy dependencies). Defaults to true")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument(
+    "repository_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    envvar="R3_REPOSITORY",
+)
+def commit(remove_previous, copy_previous_output, exclude_done, check: bool, path, repository_path):
+    if check:
+        correct = _check_job(path, repository_path)
+        if not correct:
+            print("Job has inconsistencies. Aborted commit, run with --no-check to commit anyway.")
+            sys.exit(1)
+
+    repository = r3.Repository(repository_path)
+    job = r3.Job(path)
+
+    job = repository.resolve(job)
+
+
+    previous_job: Optional[r3.Job] = None
+    if remove_previous or copy_previous_output:
+        print("looking up previous job")
+        history = _history(latest=True, path=path, repository_path=repository_path)
+        if not history:
+            raise ValueError(f"No previous job found for {path}")
+        previous_job = history[0]
+        print(f"previous job: {previous_job.id} {previous_job.timestamp}")
+
+    print("Commiting")
+    job = repository.commit(job)
+    print(job.path)
+
+    if copy_previous_output:
+        print("copying previous output")
+        assert previous_job is not None
+        previous_output = previous_job.path / "output"
+        output = job.path / "output"
+        output.mkdir(exist_ok=True)
+
+        for item in previous_output.iterdir():
+            if exclude_done and item.name == "done":
+                print("skipping done file")
+                continue
+            if item.is_dir():
+                print("Copying directory", item)
+                shutil.copytree(item, output / item.name)
+            else:
+                print("Copying file", item)
+                shutil.copy2(item, output / item.name)
+
+    if remove_previous:
+        assert previous_job is not None
+        print("deleting previous job", previous_job.path)
+        repository.remove(previous_job)
+
+
+@cli.command(name="dev-checkout")
+@click.option('--allow-bugs/--no-allow-bugs', default=False)
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument(
+    "repository_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    envvar="R3_REPOSITORY",
+)
+def dev_checkout(allow_bugs: bool, path: str, repository_path: str) -> None:
+    repository = r3.Repository(repository_path)
+
+    job = r3.Job(path)
+    job = repository.resolve(job)
+
+    missing_dependencies = []
+    for dependency in job.dependencies:
+        if dependency not in repository:
+            print(f"Error: Missing dependency: {dependency}")
+            print("destination:", dependency.destination)
+            missing_dependencies.append(dependency)
+
+    if missing_dependencies:
+            sys.exit(1)
+
+    buggy_dependencies = []
+    for dependency in job.dependencies:
+        if isinstance(dependency, r3.JobDependency):
+            resolved_dependency = repository.resolve(dependency)
+            dependency_job = r3.Job(repository.path / 'jobs' / resolved_dependency.job)
+            tags = dependency_job.metadata.get("tags", [])
+            bug_tags = [tag for tag in tags if any(tag.startswith(p) for p in _config()["blockers"]["tags"])]
+            if bug_tags:
+                print(f"Bugged dependency for {dependency.destination}:")
+                for tag in bug_tags:
+                    print(f"- {tag}")
+                buggy_dependencies.append(dependency)
+    if buggy_dependencies and not allow_bugs:
+        print("Bugged dependencies detected, aborting. Continue with --allow-bugs")
+        sys.exit(1)
+
+    for dependency in job.dependencies:
+        if str(dependency.destination) in _config()["dev_checkout"]["ignored_destinations"]:
+            print(f"Skipping {dependency.destination} (ignored destination)")
+            continue
+
+        if isinstance(dependency, r3.GitDependency) and dependency.repository in _config()["dev_checkout"]["ignored_repositories"]:  # noqa: E501
+            print(f"Skipping {dependency.repository} (ignored repository)")
+            continue
+
+        if dependency.destination.exists():
+            print(f"Skipping {dependency.destination} (exists)")
+            continue
+
+        print("checking out", dependency, dependency.destination)
+        repository.checkout(dependency, path)
+
+        if isinstance(dependency, r3.GitDependency):
+            git_repo_path = repository.path / dependency.repository_path
+
+            # get-url is too recent...
+            #upstream_url = execute(
+            #    "git remote get-url origin",
+            #    capture=True, directory=git_repo_path
+            #)
+
+            output = execute(
+                "git remote -v",
+                capture=True, directory=git_repo_path
+            )
+
+            # just for type checking
+            assert isinstance(output, str)
+            match = re.search(r"origin\s+(.*)\s+\(fetch\)", output)
+            if match is None:
+                print("ERROR: Unable to get origin url.")
+                continue
+
+            upstream_url = match.group(1)
+            print(f"upstream url: {upstream_url}")
+
+            execute(
+                f"git remote add upstream {upstream_url}",
+                directory=dependency.destination
+            )
+
+            # execute(
+            #     f"git -C {dependency.destination} fetch upstream",
+            # )
+
+            # execute(
+            #     f"git -C {dependency.destination} branch -u upstream/{branch} {branch}",
+            # )
+
+
+
+@cli.command(name="dev-cleanup")
+@click.option('--force/--no-force', '-f', default=False,
+              help="Force cleanup even if uncommitted/unpushed changes are detected")
+@click.option('--ignore-untracked/--no-ignore-untracked', default=False,
+              help="Ignore untracked files when checking for clean state")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument(
+    "repository_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    envvar="R3_REPOSITORY",
+)
+def dev_cleanup(force: bool, ignore_untracked: bool, path: str, repository_path: str) -> None:
+    job = r3.Job(path)
+    repository = r3.Repository(repository_path)
+    if job in repository:
+        print("ERROR: Can only dev cleanup jobs that are not committed.")
+        sys.exit(1)
+
+    # Check git dependencies before cleanup
+    all_clean, results = _check_git_dependencies(job, Path(path), repository)
+
+    # Apply ignore_untracked filter if requested
+    if ignore_untracked:
+        for result in results:
+            if result.is_checked_out and result.has_untracked:
+                # Remove untracked-related issues
+                result.issues = [i for i in result.issues if "untracked" not in i.lower()]
+                result.has_untracked = False
+                # Recalculate is_clean
+                result.is_clean = len(result.issues) == 0
+        all_clean = all(r.is_clean for r in results if r.is_checked_out)
+
+    has_checked_out_git_deps = any(r.is_checked_out for r in results)
+
+    if has_checked_out_git_deps:
+        _format_git_check_results(results)
+
+        if not all_clean:
+            print("WARNING: Some git dependencies have uncommitted or unpushed changes!")
+            print("These changes will be LOST if you proceed with cleanup.")
+            print()
+            if not force:
+                print("Aborting. Use --force to override this check.")
+                sys.exit(1)
+            else:
+                print("--force specified, proceeding with cleanup...")
+                print()
+
+    for dependency in job.dependencies:
+        print(dependency.destination)
+
+        target_path = Path(path) / dependency.destination
+        if target_path.exists(follow_symlinks=False):
+            if target_path.is_symlink():
+                print("removing link", target_path)
+                target_path.unlink()
+            elif target_path.is_file():
+                print("removing file", target_path)
+                target_path.unlink()
+            elif target_path.is_dir():
+                print("removing directory", target_path)
+                shutil.rmtree(target_path)
+
+            while target_path.parent != path:
+                if not list(target_path.parent.iterdir()):
+                    print("Cleaning up", target_path.parent)
+                    target_path.parent.rmdir()
+                    target_path = target_path.parent
+                else:
+                    break
+
+    for other_directory in ['output', '__pycache__']:
+        target_path = Path(path) / other_directory
+
+        if target_path.is_dir():
+            print("removing directory", target_path)
+            shutil.rmtree(target_path)
+
+
+@cli.command(name="git-check")
+@click.option('--verbose/--no-verbose', '-v', default=False,
+              help="Show detailed commit information")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path), default=Path.cwd())
+@click.argument(
+    "repository_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    envvar="R3_REPOSITORY",
+)
+def git_check(verbose: bool, path: Path, repository_path: Path) -> None:
+    """Check git dependencies for uncommitted or unpushed changes."""
+    repository = r3.Repository(repository_path)
+    job = r3.Job(path)
+    job = repository.resolve(job)
+
+    all_clean, results = _check_git_dependencies(job, path, repository)
+    _format_git_check_results(results, verbose=verbose)
+
+    sys.exit(0 if all_clean else 1)
+
+
+if __name__ == "__main__":
+    cli()

@@ -1,0 +1,464 @@
+import functools
+import json
+import os
+import re
+import sys
+import time
+import uuid
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+from time import sleep
+from typing import Optional
+
+import click
+import r3
+from executor import ExternalCommand, ExternalCommandFailed
+from executor.ssh.client import RemoteCommand
+from tqdm import tqdm
+
+# xr3-slurm reuses the suite-wide config loader that lives in the sibling xr3 dir.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "xr3"))
+import xr3config
+
+import xr3slurmlib
+
+
+@functools.lru_cache(maxsize=1)
+def _config() -> dict:
+    return xr3config.load_config()
+
+
+def _slurm_config() -> dict:
+    return _config()["slurm"]
+
+
+def _build_query(tags, queries) -> dict:
+    """Build a Mongo-style query dict from tag/query CLI options.
+
+    Copied (intentionally) from xr3 so xr3-slurm stays self-contained.
+    - tags -> {"tags": {"$all": [...]}} (omitted if empty)
+    - queries: JSON fragments; bare `key: value` is wrapped in {...} and merged.
+    """
+    query: dict = {}
+    if tags:
+        query["tags"] = {"$all": list(tags)}
+    for q in queries:
+        if not q.startswith("{"):
+            q = f"{{{q}}}"
+        query_data = json.loads(q)
+        if not isinstance(query_data, dict):
+            raise ValueError(f"Query must be a JSON object, got {query_data}")
+        query.update(query_data)
+    return query
+
+
+def _run(cluster: Optional[str], command: str, **kwargs):
+    """RemoteCommand if a cluster host is given, else a local ExternalCommand."""
+    if cluster:
+        return RemoteCommand(cluster, command, **kwargs)
+    return ExternalCommand(command, **kwargs)
+
+
+def _capture(cluster: Optional[str], command: str) -> str:
+    cmd = _run(cluster, command, capture=True)
+    cmd.start()
+    return cmd.output
+
+
+def _get_job_id(job_name: str, cluster: Optional[str]) -> str:
+    """Newest/highest-priority slurm job id for a job name (was sattachx_wait)."""
+    # Sort so the first row is the job to attach to: -t (state desc: running first),
+    # -M (time used desc: longest-running first), -p (priority desc: else highest-priority pending).
+    output = _capture(
+        cluster,
+        f"squeue --me --sort=-t,-M,-p --format=%i --noheader --name={job_name}",
+    )
+    return output.strip().split("\n")[0]
+
+
+def _get_job_state(job_id: str, cluster: Optional[str]) -> str:
+    """squeue state, or 'RUNNING.<step>' while running ('RUNNING.None' until a step exists)."""
+    state = _capture(
+        cluster, f'squeue --jobs={job_id} --noheader --format="%T"'
+    ).strip()
+    if state == "RUNNING":
+        sacct = _capture(cluster, f"sacct -j {job_id} -P")
+        return f"RUNNING.{xr3slurmlib.parse_running_step(sacct)}"
+    return state
+
+
+def _sattach(job_id: str, cluster: Optional[str]) -> None:
+    """Attach to the running step of a job id (was the sattachx bash script)."""
+    sacct = _capture(cluster, f"sacct -j {job_id}")
+    step = xr3slurmlib.parse_sattach_step(sacct)
+    if step is None:
+        print(f"No step to attach for job {job_id}")
+        return
+    print(f"attaching to {step}")
+    time.sleep(1)
+    _run(cluster, f"sattach {step}").start()
+
+
+def _sattach_wait(job_name_or_id: str, cluster: Optional[str] = None) -> None:
+    """Poll a job (by numeric id or name) and attach once a step is RUNNING.
+
+    Absorbs sattachx_wait: if given a name, resolve the id and keep re-resolving
+    when the queued job changes; attach via _sattach when a step appears.
+    """
+    try:
+        int(job_name_or_id)
+        job_name = None
+        job_id = job_name_or_id
+    except ValueError:
+        job_name = job_name_or_id
+        job_id = _get_job_id(job_name, cluster)
+
+    job_state = None
+    last_state_change = datetime.utcnow()
+    while True:
+        new_state = _get_job_state(job_id, cluster) if job_id else ""
+        if new_state != job_state:
+            if job_state is not None:
+                print()
+            if job_id:
+                print(f"job {job_id} is {new_state}", end="", flush=True)
+                if job_name is None and new_state == "":
+                    print("\nJob not existing anymore, quitting")
+                    return
+            else:
+                print(f"Waiting for job {job_name} to appear", end="", flush=True)
+            job_state = new_state
+            last_state_change = datetime.utcnow()
+        else:
+            elapsed = str(datetime.utcnow() - last_state_change).split(".", 1)[0]
+            if job_id:
+                print(f"\rjob {job_id} is {new_state} since {elapsed}", end="", flush=True)
+            else:
+                print(f"\rWaiting for job {job_name} to appear since {elapsed}", end="", flush=True)
+
+        if job_state.startswith("RUNNING"):
+            _, step_no = job_state.split(".")
+            if step_no != "None":
+                _sattach(job_id, cluster)
+        elif job_name is not None or not job_id:
+            new_job_id = _get_job_id(job_name, cluster)
+            if new_job_id != job_id:
+                print(f"\nswitching to monitoring job {new_job_id}")
+                job_id = new_job_id
+                job_state = None
+
+        sleep(10)
+
+
+def _submit_job(
+    path: Path,
+    cluster: Optional[str],
+    dry: bool = False,
+    check_existing_jobs: bool = False,
+    observe: bool = False,
+    restart_failed: bool = False,
+    verbose: int = 0,
+    partition: Optional[str] = None,
+    mem: Optional[str] = None,
+) -> bool:
+    path = path.absolute()
+    done_file = path / "output" / "done"
+
+    if done_file.is_file():
+        done_state = xr3slurmlib.parse_done_state(done_file.read_text())
+        if done_state == "restart":
+            if verbose >= 3:
+                print("restart requested")
+        elif done_state == "failed" and restart_failed:
+            if verbose >= 2:
+                print("restarting failed job")
+            if not dry:
+                done_file.write_text("restart\n")
+        else:
+            return False
+
+    script = path / "run.sh"
+    if not script.exists():
+        raise click.ClickException("No run script.")
+
+    full_id = path.name
+    try:
+        uuid.UUID(full_id)
+    except ValueError:
+        raise click.ClickException("Job directory is not a valid UUID.")
+
+    if check_existing_jobs:
+        squeue_output = _capture(cluster, f"squeue --noheader --name={full_id}")
+        if squeue_output.strip():
+            if verbose >= 3:
+                print(f"Job is already in queue:\n{squeue_output}")
+            return False
+
+    slurm_cfg = _slurm_config()
+    command = xr3slurmlib.build_sbatch_command(
+        script_path=str(script),
+        job_dir=str(path),
+        full_id=full_id,
+        is_array=xr3slurmlib.is_array_job(script.read_text()),
+        exclude_nodes=slurm_cfg["exclude_nodes"],
+        partition=partition if partition is not None else slurm_cfg["partition"],
+        mem=mem if mem is not None else slurm_cfg["mem"],
+    )
+
+    if dry:
+        if verbose >= 1:
+            print(f"Would submit job {full_id}:")
+        print(command)
+        return True
+
+    os.makedirs(path / "output", exist_ok=True)
+    cmd = _run(cluster, command, capture=True)
+    print(command)
+    cmd.start()
+    output = cmd.output
+    print(output)
+
+    if observe:
+        match = re.match(r"^Submitted batch job (.*)$", output)
+        if not match:
+            print("Observing failed: Unable to get job id from job.")
+        else:
+            job_id = match.group(1)
+            print("Sleeping for 5s before attaching...")
+            time.sleep(5)
+            _sattach_wait(job_id, cluster=None)
+    return True
+
+
+def _running_jobs_by_name() -> dict:
+    """{job_name: (slurm_id, state)} across all configured headnodes."""
+    running = {}
+    for cluster in _slurm_config()["headnodes"]:
+        output = _capture(cluster, "squeue --me --noheader --format='%j|%i|%T'")
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            job_name, job_id, job_state = line.split("|")
+            running[job_name] = (job_id, job_state)
+    return running
+
+
+def _find_slurm_job(job_name: str):
+    """Return (cluster, slurm_id) for the first headnode with this job name."""
+    for cluster in _slurm_config()["headnodes"]:
+        output = _capture(
+            cluster, f"squeue --me --noheader --format=%i --name={job_name}"
+        )
+        if output.strip():
+            return cluster, output.strip()
+    return None, None
+
+
+def _all_slurm_jobs():
+    """List of (cluster, job_name, slurm_id, state) across all headnodes."""
+    jobs = []
+    for cluster in _slurm_config()["headnodes"]:
+        output = _capture(cluster, "squeue --me --noheader --format='%j|%i|%T'")
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            job_name, job_id, job_state = line.split("|")
+            jobs.append((cluster, job_name, job_id, job_state))
+    return jobs
+
+
+def _watch_by_tag(tags, selection: str) -> None:
+    repository = r3.Repository(os.environ["R3_REPOSITORY"])
+    last_state = None
+    last_state_change = datetime.now()
+    while True:
+        jobs = repository.find(query={"tags": {"$all": list(tags)}})
+        if not jobs:
+            if last_state != "no_jobs_found":
+                last_state = "no_jobs_found"
+                last_state_change = datetime.now()
+            print(f"No jobs found for {datetime.now() - last_state_change}\r", end="", flush=True)
+            sleep(10)
+            continue
+
+        print(f"found {len(jobs)} matching r3 jobs")
+        if selection == "oldest":
+            job = jobs[0]
+        elif selection == "newest":
+            job = jobs[-1]
+        elif selection in ("oldest-running-job", "newest-running-job"):
+            cluster_jobs = sorted(_all_slurm_jobs(), key=lambda x: int(x[2]))
+            if selection == "newest-running-job":
+                cluster_jobs = list(reversed(cluster_jobs))
+            by_id = {job.id: job for job in jobs}
+            matching = [e for e in cluster_jobs if e[1] in by_id]
+            print(f"found ({len(matching)}) jobs in clusters")
+            running = [e for e in matching if e[-1] == "RUNNING"]
+            print(f"found ({len(running)}) running jobs in clusters")
+            if not running:
+                sleep(10)
+                continue
+            job = by_id[running[0][1]]
+        else:
+            raise click.ClickException("Invalid selection.")
+
+        print(f"Attaching to job {job.id}...")
+        for tag in job.metadata["tags"]:
+            print(f"- {tag}")
+        sleep(5)
+        cluster, slurm_id = _find_slurm_job(job.id)
+        if cluster is None:
+            if last_state != "job_not_in_queue":
+                last_state = "job_not_in_queue"
+                last_state_change = datetime.now()
+            print(f"Job not found in queue for {datetime.now() - last_state_change}\r", end="", flush=True)
+            sleep(10)
+            continue
+        if last_state != "jobs_in_queue":
+            last_state = "jobs_in_queue"
+            last_state_change = datetime.now()
+
+        print(f"Attaching to job {slurm_id} on {cluster}...")
+        try:
+            _sattach_wait(slurm_id, cluster=None)
+        except ExternalCommandFailed:
+            print("sattach failed")
+        sleep(10)
+
+
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@click.argument("job_ids", type=click.UUID, nargs=-1)
+@click.option("--tag", "-t", "tags", multiple=True, type=str,
+              help="Select jobs by tag ($all). Combine with JOB_IDS or --query.")
+@click.option("--query", "-q", "queries", type=str, multiple=True,
+              help="JSON query fragment to select jobs. Repeatable.")
+@click.option("--dry/--no-dry", default=False)
+@click.option("--check-existing-jobs/--no-check-existing-jobs", default=False,
+              help="Skip jobs already in the queue.")
+@click.option("-r", "--restart-failed/--no-restart-failed", default=False)
+@click.option("--cluster", "-c", default=None,
+              help='sbatch host. Default: slurm.submit_host. Pass "" to submit locally.')
+@click.option("-o", "--observe/--no-observe", default=False,
+              help="Attach to the job after submitting (single job only).")
+@click.option("-p", "--partition", default=None,
+              help="sbatch --partition for this submit (overrides slurm.partition).")
+@click.option("-m", "--mem", default=None,
+              help="sbatch --mem for this submit (overrides slurm.mem).")
+@click.option("-v", "--verbose", count=True, help="Increase verbosity (repeatable).")
+def submit(job_ids, tags, queries, dry, check_existing_jobs, restart_failed, cluster, observe,
+           partition, mem, verbose):
+    """Submit jobs to SLURM, selected by JOB_IDS and/or --tag/--query."""
+    if cluster is None:
+        cluster = _slurm_config()["submit_host"]
+    if not cluster:            # "" or null => submit locally
+        cluster = None
+
+    repository = r3.Repository(os.environ["R3_REPOSITORY"])
+    paths = []
+
+    for job_id in job_ids:
+        paths.append(repository.path / "jobs" / str(job_id))
+
+    if tags or queries:
+        query = _build_query(tags, queries)
+        print(f"Selecting jobs with query:\n{json.dumps(query, indent=2)}")
+        found = repository.find(query=query)
+        for job in found:
+            print(f"  {job.id}: {job.metadata.get('tags', ['no tags'])[0]}")
+            paths.append(Path(job.path))
+
+    paths = list(dict.fromkeys(paths))  # dedup: a job given as JOB_ID may also match --tag/--query
+    if not paths:
+        raise click.ClickException("No jobs selected (give JOB_IDS, --tag, or --query).")
+    if observe and len(paths) > 1:
+        raise click.ClickException("Can't observe more than one job at once.")
+
+    for path in paths:
+        _submit_job(
+            Path(path), cluster=cluster, dry=dry,
+            check_existing_jobs=check_existing_jobs,
+            restart_failed=restart_failed, observe=observe,
+            verbose=verbose, partition=partition, mem=mem,
+        )
+
+
+@cli.command()
+@click.option("--summary/--no-summary", default=True)
+@click.option("--details/--no-details", default=True)
+@click.argument("tags", nargs=-1)
+def status(summary, details, tags):
+    """Show done/running status for jobs whose tags match the given globs."""
+    repository = r3.Repository(os.environ["R3_REPOSITORY"])
+    query = {"$and": [{"tags": {"$glob": tag}} for tag in tags]}
+    jobs = repository.find(query=query)
+
+    if not jobs:
+        print("No jobs found.")
+        return
+
+    running = _running_jobs_by_name()
+
+    def check_job_status(job):
+        done_file = job.path / "output" / "done"
+        state = ""
+        if done_file.is_file():
+            classified = xr3slurmlib.parse_done_state(done_file.read_text())
+            state = classified  # 'restart' | 'failed' | 'done'
+        cluster_job_id, cluster_state = running.get(job.id, (None, None))
+        return state, cluster_job_id, cluster_state
+
+    job_names = xr3slurmlib.remove_common_prefix([job.metadata["tags"][0] for job in jobs])
+    data = []
+    for job, job_name in zip(tqdm(jobs, delay=10), job_names):
+        state, cluster_job_id, cluster_state = check_job_status(job)
+        data.append({
+            "job_name": job_name, "job_state": state,
+            "cluster_job_id": cluster_job_id, "cluster_state": cluster_state,
+        })
+
+    if summary:
+        summary_states = []
+        for item in data:
+            parts = [item[k] for k in ("job_state", "cluster_state") if item[k]]
+            summary_states.append("-".join(parts))
+        for key, value in Counter(summary_states).items():
+            print(f"{key}: {value}")
+
+    if details:
+        for item in sorted(data, key=lambda i: i["job_name"]):
+            jid = item["cluster_job_id"] or ""
+            cstate = item["cluster_state"] or ""
+            print(f"{item['job_name']}: {item['job_state']} {jid} {cstate}")
+
+
+@cli.command()
+@click.argument("job_name_or_id", required=False)
+@click.option("--tag", "-t", "tags", multiple=True, type=str,
+              help="Watch by r3 tag ($all) instead of a job name/id.")
+@click.option("--newest", "selection", flag_value="newest", default=True)
+@click.option("--oldest", "selection", flag_value="oldest")
+@click.option("--oldest-running-job", "selection", flag_value="oldest-running-job")
+@click.option("--newest-running-job", "selection", flag_value="newest-running-job")
+def watch(job_name_or_id, tags, selection):
+    """Attach to a SLURM job by name/id, or by r3 --tag selection.
+
+    Compose with xr3: `xr3-slurm watch $(xr3 history --latest --id .)`.
+    """
+    if job_name_or_id and tags:
+        raise click.ClickException("Give either a job name/id or --tag, not both.")
+    if job_name_or_id:
+        _sattach_wait(job_name_or_id, cluster=None)
+    elif tags:
+        _watch_by_tag(tags, selection)
+    else:
+        raise click.ClickException("Give a job name/id or --tag.")
+
+
+if __name__ == "__main__":
+    cli()

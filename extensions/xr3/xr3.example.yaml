@@ -1,0 +1,25 @@
+# xr3 configuration — copy to ~/.config/xr3.yaml (or point $XR3_CONFIG at it)
+# and edit for your machine. See CONTRACT.md for what xr3 assumes about jobs.
+
+pathmap:
+  # Working directories under these roots map to r3 logical paths by stripping
+  # the root prefix. `history`, `diff`, and `check`'s path asserts need this.
+  roots:
+    - path: /abs/path/to/your/project
+    # - path: /abs/path/to/another/project
+    #   prefix: some-prefix        # optional: prepend to the derived r3 path
+
+blockers:
+  tags: ["bug/"]        # tag prefixes that block `check` and `dev-checkout`
+  block_on_wip: true    # a non-empty metadata.WIP fails `check`
+
+dev_checkout:
+  ignored_destinations: []    # dep destinations to skip when checking out
+  ignored_repositories: []    # git dep repos to skip when checking out
+
+slurm:                     # read only by xr3-slurm (MLCloud / galvani; ports to other SLURM)
+  headnodes: ["galvani"]   # hosts to SSH for squeue/sacct (status, watch --tag)
+  submit_host: galvani     # host to SSH for sbatch; set null (or pass --cluster "") to submit locally
+  exclude_nodes: []        # e.g. ["galvani-cn221", "galvani-cn240"]
+  partition: null          # default --partition
+  mem: null                # default --mem

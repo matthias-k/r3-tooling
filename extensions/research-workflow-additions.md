@@ -1,5 +1,11 @@
 # Candidate additions for `RESEARCH_WORKFLOW.md`
 
+> The assumptions the `xr3` / `xr3-slurm` tools place on jobs (the `output/done` marker, the
+> `tags[0]`/`metadata.path` conventions, pathmap, SLURM config) are the single source of truth in
+> [`CONTRACT.md`](CONTRACT.md); `RESEARCH_WORKFLOW.md` should **link** it rather than restate it. The
+> conventions below are the *house workflow* around those tools.
+
+
 House conventions observed in the real r3 repo store + `projects/` tree (and confirmed while building the
 pure r3 skill) that look **under- or un-documented** in the current `RESEARCH_WORKFLOW.md`. These are for
 the *house* doc, not the pure r3 skill. Each item is tagged **[NEW?]** (probably not yet in the workflow
