@@ -22,7 +22,7 @@ covers when to use which, and each command is introduced below where it's first 
 work against a **repository** — create one with `r3 init <path>` and point r3 at it via
 `$R3_REPOSITORY` (or `--repository` per command).
 
-> **Verified against r3 `main` `262a937` / v0.5.0 on 2026-08-17.** r3 grows with `main` —
+> **Verified against r3 `main` `0585fc1` / v0.5.0 on 2026-09-08.** r3 grows with `main` —
 > confirm claims against live `r3` before relying on a subtlety (see "Keep this current", below).
 
 ## 1. The model — a job is a self-contained directory
@@ -186,9 +186,12 @@ r3 commit mnist-eval                        # → a1b2c3…
 r3 checkout a1b2c3… /tmp/wd && cd /tmp/wd && python run.py
 #   results now live in the store at <repo>/jobs/a1b2c3…/output/ (via the output/ symlink)
 
-# 4. Find it again (find is tag-only; by path needs the Python API):
+# 4. Find it again — by tag, by path glob, browse the tree, or (arbitrary queries) the API:
 r3 find -t mnist -l
-python -c "import r3; print(r3.Repository('$R3_REPOSITORY').find({'path':'experiments/mnist-eval'}))"
+r3 find -p 'experiments/mnist-eval' -l      # -p filters metadata.path (a GLOB — you add wildcards)
+r3 ls experiments -l                        # browse the path tree one level under `experiments`
+# API for what the CLI can't express — e.g. a tag GLOB (`find --tag` is exact-match only):
+python -c "import r3; print(r3.Repository('$R3_REPOSITORY').find({'tags': {'\$glob': 'bug/*'}}))"
 ```
 
 **What this shows:** a dev run's `output/` is **throwaway** — persisted results come from
@@ -226,15 +229,26 @@ run.
 
 ## 6. Finding jobs & queries
 
-`r3 find [-t TAG]… [-l] [--latest]` lists jobs — **tag-only** (`-t` repeatable, AND'd; `-l`
-long shows `uuid | timestamp | #tags`; lists all by default, `--latest` the newest match).
+`r3 find` lists jobs, **oldest-first by timestamp**. Filters:
 
-For anything **beyond tags** — including **`path`** — use the query engine, via the Python
-API (`repo.find(query, latest)`) or inside a `find_latest`/`find_all` dependency. `r3 find`
-cannot search by path yet (`--path` is planned), so "find by path" means the API, or giving
-the job a tag you can search. The grammar is Mongo-style but a **subset** only, with traps that **silently return the wrong
-jobs** (e.g. `$ne` on an array doesn't exclude; unknown operators are ignored) — **read
-`reference/query-grammar.md` before writing any non-trivial query.**
+- **`-t/--tag TAG`** (repeatable, AND'd) — jobs carrying every given tag.
+- **`-p/--path GLOB`** — jobs whose `metadata.path` matches a **literal SQLite GLOB** (you add
+  the wildcards yourself: `-p '*mnist*'`, `-p 'proj/experiments/*'`). AND-ed with `--tag`.
+- **`--latest`** — only the single newest match (default lists all). **`-l/--long`** shows
+  `id | datetime | path | tags`; **`--tags/--no-tags`** toggles the tags column.
+
+`r3 ls [PREFIX] [-l] [--tags/--no-tags] [-t]` browses the `metadata.path` tree one level under
+PREFIX (the root if omitted): `.` = the job(s) sitting *exactly* at PREFIX (with a revision
+count + latest timestamp), `name` = a job one level below, `name/` = a subdirectory (jobs live
+deeper); a name that is **both** shows both lines. `-l` adds id + tags, `-t` sorts by timestamp
+(newest first) instead of alphabetically. Jobs without a `path` aren't part of the tree.
+
+For anything **beyond tag and path** — other metadata fields, or full Mongo-style queries — use the
+query engine, via the Python API (`repo.find(query, latest)`) or inside a
+`find_latest`/`find_all` dependency. The grammar is Mongo-style but a **subset** only, with
+traps that **silently return the wrong jobs** (e.g. `$ne` on an array doesn't exclude; unknown
+operators are ignored) — **read `reference/query-grammar.md` before writing any non-trivial
+query.**
 
 After editing metadata by hand, run `r3 rebuild-index` to refresh the query index.
 
@@ -244,12 +258,12 @@ After editing metadata by hand, run `r3 rebuild-index` to refresh the query inde
 date raises `TypeError` at commit, so quote dates. Edit it via `r3 edit <id>` (opens
 `$EDITOR`, then reindexes) or edit the file and `r3 rebuild-index`.
 
-`tags` is the only metadata field r3's *tooling* privileges today (`find --tag`, `#tag`
-rendering in `find -l`).
+`tags` and `path` are the metadata fields r3's *tooling* privileges: `find --tag` and `#tag`
+rendering for tags; `find --path`, the `find -l` path column, and `r3 ls` for path.
 
 **`path` is the recommended organizing convention** — a virtual-filesystem path that
-`find_latest`/`find_all` build on. It's queryable like any other metadata field, but not yet
-surfaced by the CLI (`--path` / an `r3 ls` are planned). Treat these as examples, not rules:
+`find_latest`/`find_all` build on, that `r3 ls` browses, and that `find -p` filters; it's also
+queryable like any other metadata field. Treat these as examples, not rules:
 
 - Flat (`kodak`) or nested (`datasets/kodak`, `my-project/experiments/pilot`).
 - A `path` **need not be unique** — a whole sweep can share one; `find_latest` picks the
@@ -270,7 +284,8 @@ arbitrary code execution. The full verb set:
 | `r3 commit <jobdir>` | freeze a job; prints the bare uuid |
 | `r3 checkout <id> <workdir>` | materialize a committed job into a fresh workdir |
 | `r3 remove <id>` | delete a job (refuses if another job depends on it) |
-| `r3 find [-t TAG]… [-l] [--latest]` | list jobs — **tag-only** |
+| `r3 find [-t TAG]… [-p GLOB] [-l] [--latest]` | list jobs by tag / `path` glob, oldest-first |
+| `r3 ls [PREFIX] [-l]` | browse the `metadata.path` tree one level under PREFIX |
 | `r3 rebuild-index` | rebuild the query index from the job files |
 | `r3 edit <id>` | open `$EDITOR` on `metadata.yaml`, then reindex |
 
@@ -281,8 +296,9 @@ Every verb but `init` reads the repository from `$R3_REPOSITORY` or `--repositor
 it**, not just a fallback. Reach for it whenever the task is working over the graph rather
 than running one lifecycle verb — e.g. *find every job, in any dependency order, that
 transitively uses repo X at commit Y*. Two things the CLI does not cover that the API (or an
-environment's own tooling) does: **querying beyond tags** (see "Finding jobs & queries") and
-**dev checkout** (see "Running & the lifecycle"). Entry points are `r3.Repository(path)` and
+environment's own tooling) does: **querying beyond tag and path** (arbitrary metadata fields and
+full Mongo queries; see "Finding jobs & queries") and **dev checkout** (see "Running & the
+lifecycle"). Entry points are `r3.Repository(path)` and
 `r3.Job(dir)` → `reference/python-api.md`.
 
 **Inspecting a committed job — there is no `r3 show`.** A committed job lives read-only at
@@ -297,8 +313,9 @@ matching, so a partial id is treated as "not found".
 r3 has several agent-biting behaviors. **Before relying on a subtlety, read
 `reference/gotchas.md`.** The three that bite most:
 
-- `find` (without `--latest`) returns rows in **unstable order** — never read it as a
-  timeline.
+- **`commit` mishandles symlinks silently** — a file symlink is dereferenced (target content
+  stored as a plain file), a directory symlink is followed and flattened into the job, a broken
+  symlink is dropped. The link is never preserved; keep jobs to regular files.
 - A **checkout omits `r3.yaml`/`metadata.yaml`** — the job's own *and* a recursively-copied
   dependency's — so a running job can't read its own metadata; keep runtime parameters in a
   committed file (e.g. `config.yaml`), not *only* in `metadata.yaml` (a checkout can't read it
@@ -318,9 +335,10 @@ r3 tracks `main`, which moves. **Confirm against live `r3 --help`, live behavior
 source — not memory** — before relying on any version-sensitive detail.
 
 The validity stamp at the top turns re-verification into a diff: run
-`git log 262a937..main` on the r3 repo, focused on the CLI, `find`/query, checkout, and
-`path`-promotion areas, and fold in what changed. In particular, the unstable-`find`-order
-behavior is expected to gain an ordering upstream — check for it.
+`git log 0585fc1..main` on the r3 repo, focused on the CLI, `find`/query, checkout, and
+`path`-promotion areas, and fold in what changed. r3 now ships a `LIMITATIONS.md` /
+`ROADMAP.md` — diff those in too; roadmap items to watch are **fail-closed / proper symlink
+support** (commit currently mishandles symlinks silently) and **power-loss `fsync` durability**.
 
 Your environment may also layer house/lab conventions on top of vanilla r3 — see your
 environment's own docs for those.
