@@ -18,14 +18,18 @@ def resolve_job_path(fs_path, config: dict, config_source: Optional[str] = None)
 
     Finds the `config['pathmap']['roots']` entry containing `fs_path` (the most
     specific / longest root wins), returns the path relative to that root, and
-    applies the entry's optional `prefix`. Raises PathmapError with an
-    actionable message (naming `config_source`, if given) when no root matches.
+    applies the entry's optional `prefix`. Each root's `path` may use `~` and
+    `$VARS`, which are expanded before matching. Raises PathmapError with an
+    actionable message (naming `config_source`, if given) when no root matches,
+    and also when `fs_path` resolves to a root itself (no job sub-path beneath it).
     """
     resolved = Path(fs_path).resolve()
     roots = (config.get("pathmap") or {}).get("roots") or []
 
-    def _expand(p: str) -> Path:
-        return Path(os.path.expanduser(os.path.expandvars(str(p)))).resolve()
+    def _expand(p) -> Path:
+        if not isinstance(p, str):
+            raise PathmapError(f"pathmap root has a non-string `path`: {p!r}")
+        return Path(os.path.expanduser(os.path.expandvars(p))).resolve()
 
     matches = []
     for entry in roots:

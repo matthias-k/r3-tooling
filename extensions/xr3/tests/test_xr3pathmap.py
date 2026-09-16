@@ -93,4 +93,4 @@ def test_job_dir_equals_root_raises(tmp_path):
     cfg = {"pathmap": {"roots": [{"path": str(root)}]}}
     with pytest.raises(xr3pathmap.PathmapError) as excinfo:
         xr3pathmap.resolve_job_path(root, cfg)
-    assert "pathmap root" in str(excinfo.value).lower()
+    assert "itself a pathmap root" in str(excinfo.value).lower()
