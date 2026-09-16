@@ -127,7 +127,42 @@ resolve_defaults() {
 }
 
 # ---- phase stubs (replaced by later tasks) ----
-phase_preflight() { info "preflight (stub)"; }
+phase_preflight() {
+  info "preflight: checking prerequisites"
+  local missing=0
+  for tool in git ssh; do
+    command -v "$tool" >/dev/null 2>&1 || { err "missing required tool: $tool"; missing=1; }
+  done
+  [ "$missing" -eq 1 ] && { err "install the missing tools and re-run"; exit 1; }
+
+  if [ "$CLONE_PROTO" = "ssh" ]; then
+    # ssh -T git@github.com exits 1 on success (no shell); grep for the greeting.
+    if ssh -T -o BatchMode=yes -o ConnectTimeout=8 git@github.com 2>&1 | grep -qi "successfully authenticated"; then
+      info "github ssh access ok"
+    else
+      warn "github ssh auth not confirmed; foreman is private and its clone may fail."
+      warn "use --clone-proto https for public repos, or set up an ssh key for github."
+    fi
+  fi
+
+  if ! command -v uv >/dev/null 2>&1; then
+    local do_install=0
+    if [ "$ASSUME_YES" -eq 1 ]; then
+      do_install=1
+    else
+      local ans; prompt ans "uv not found. Install it now via the official installer?" "yes"
+      [ "$ans" = "yes" ] && do_install=1
+    fi
+    if [ "$do_install" -eq 1 ]; then
+      info "installing uv"
+      run bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+      export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+    else
+      err "uv is required; install from https://docs.astral.sh/uv/ and re-run"; exit 1
+    fi
+  fi
+  [ "$DRY_RUN" -eq 1 ] || info "uv: $(command -v uv 2>/dev/null || echo 'will be installed')"
+}
 phase_clones()    { info "clones (stub)"; }
 phase_venv()      { info "venv (stub)"; }
 phase_wrappers()  { info "wrappers (stub)"; }
