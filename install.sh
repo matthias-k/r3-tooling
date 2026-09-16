@@ -195,7 +195,17 @@ phase_clones() {
   clone_or_update "$TOOLCHAIN_ROOT/r3" "$R3_REMOTE" "$R3_REF" "r3"
   clone_or_update "$TOOLCHAIN_ROOT/foreman" "$FOREMAN_REMOTE" "$FOREMAN_REF" "foreman"
 }
-phase_venv()      { info "venv (stub)"; }
+phase_venv() {
+  info "venv: $VENV_DIR (python $PYTHON_VERSION)"
+  [ -d "$VENV_DIR" ] || run uv venv --python "$PYTHON_VERSION" "$VENV_DIR" \
+    || { err "failed to create venv at $VENV_DIR"; exit 1; }
+  info "installing r3 + foreman (editable) + xr3 deps"
+  run uv pip install --python "$VENV_DIR/bin/python" \
+    -e "$TOOLCHAIN_ROOT/r3" -e "$TOOLCHAIN_ROOT/foreman" \
+    || { err "editable install of r3/foreman failed"; exit 1; }
+  run uv pip install --python "$VENV_DIR/bin/python" click pyyaml executor tqdm \
+    || { err "install of xr3 deps failed"; exit 1; }
+}
 phase_wrappers()  { info "wrappers (stub)"; }
 phase_config()    { info "config (stub)"; }
 phase_skill()     { info "skill (stub)"; }
