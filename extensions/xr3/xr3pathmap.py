@@ -4,6 +4,7 @@ Pure logic (pathlib only) so it is unit-testable without r3/executor/pyyaml.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -23,9 +24,12 @@ def resolve_job_path(fs_path, config: dict, config_source: Optional[str] = None)
     resolved = Path(fs_path).resolve()
     roots = (config.get("pathmap") or {}).get("roots") or []
 
+    def _expand(p: str) -> Path:
+        return Path(os.path.expanduser(os.path.expandvars(str(p)))).resolve()
+
     matches = []
     for entry in roots:
-        root = Path(entry["path"]).resolve()
+        root = _expand(entry["path"])
         if resolved == root or root in resolved.parents:
             matches.append((root, entry))
 
@@ -40,6 +44,11 @@ def resolve_job_path(fs_path, config: dict, config_source: Optional[str] = None)
 
     root, entry = max(matches, key=lambda m: len(str(m[0])))
     rel = resolved.relative_to(root)
+    if str(rel) == ".":
+        raise PathmapError(
+            f"{resolved} is itself a pathmap root, not a job directory. "
+            f"Run xr3 from inside a job directory beneath it."
+        )
     prefix = entry.get("prefix")
     if prefix:
         rel = Path(prefix) / rel
