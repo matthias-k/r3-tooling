@@ -163,7 +163,38 @@ phase_preflight() {
   fi
   [ "$DRY_RUN" -eq 1 ] || info "uv: $(command -v uv 2>/dev/null || echo 'will be installed')"
 }
-phase_clones()    { info "clones (stub)"; }
+# clone_or_update DIR URL REF LABEL: clone if absent; else ff-only update (safe).
+clone_or_update() {
+  local dir="$1" url="$2" ref="$3" label="$4"
+  if [ ! -d "$dir/.git" ]; then
+    info "cloning $label -> $dir"
+    run git clone --branch "$ref" "$url" "$dir" \
+      || { err "clone of $label failed ($url)"; EXIT_CODE=1; return; }
+    return
+  fi
+  if [ "$NO_UPDATE" -eq 1 ]; then info "$label present; --no-update, skipping pull"; return; fi
+  info "updating $label ($dir)"
+  # dirty tree? refuse to touch.
+  if [ -n "$(cd "$dir" && git status --porcelain 2>/dev/null)" ]; then
+    err "$label has local changes; skipping update. Resolve manually in $dir."
+    EXIT_CODE=1; return
+  fi
+  run git -C "$dir" fetch --quiet origin \
+    || { err "$label: fetch failed; skipping. Resolve manually in $dir."; EXIT_CODE=1; return; }
+  # ff-only; diverged -> error, do not merge.
+  if ! run git -C "$dir" pull --ff-only origin "$ref"; then
+    err "$label could not fast-forward (diverged from origin/$ref); skipping. Resolve manually in $dir."
+    EXIT_CODE=1
+  fi
+}
+
+phase_clones() {
+  info "clones: r3, foreman under $TOOLCHAIN_ROOT"
+  run mkdir -p "$TOOLCHAIN_ROOT" \
+    || { err "cannot create toolchain root $TOOLCHAIN_ROOT"; exit 1; }
+  clone_or_update "$TOOLCHAIN_ROOT/r3" "$R3_REMOTE" "$R3_REF" "r3"
+  clone_or_update "$TOOLCHAIN_ROOT/foreman" "$FOREMAN_REMOTE" "$FOREMAN_REF" "foreman"
+}
 phase_venv()      { info "venv (stub)"; }
 phase_wrappers()  { info "wrappers (stub)"; }
 phase_config()    { info "config (stub)"; }
