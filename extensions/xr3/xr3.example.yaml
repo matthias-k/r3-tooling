@@ -4,10 +4,15 @@
 pathmap:
   # Working directories under these roots map to r3 logical paths by stripping
   # the root prefix. `history`, `diff`, and `check`'s path asserts need this.
+  # `~` and $VARS are expanded.
   roots:
-    - path: /abs/path/to/your/project
+    # A "base root" (no `prefix`): subpaths map directly, so the first
+    # sub-directory becomes the first r3-path segment. One base root over your
+    # projects dir covers every project under it; you can list several.
+    - path: ~/projects
+    # A named root with an explicit prefix prepended to the derived path:
     # - path: /abs/path/to/another/project
-    #   prefix: some-prefix        # optional: prepend to the derived r3 path
+    #   prefix: some-prefix
 
 blockers:
   tags: ["bug/"]        # tag prefixes that block `check` and `dev-checkout`
