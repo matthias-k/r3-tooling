@@ -289,7 +289,27 @@ dev_checkout:
 EOF
   info "wrote $target"
 }
-phase_skill()     { info "skill (stub)"; }
+phase_skill() {
+  local decision="$INSTALL_SKILL"
+  if [ "$decision" = "prompt" ]; then
+    local ans; prompt ans "Install the r3 agent skill (symlink into claude/codex)?" "yes"
+    [ "$ans" = "yes" ] && decision="yes" || decision="no"
+  fi
+  [ "$decision" = "yes" ] || { info "skill install: skipped"; return; }
+
+  local src="$REPO_DIR/skills/r3"
+  link_skill() { # AGENT_DIR
+    local d="$1"
+    [ -d "$d" ] || { info "skill: $d absent, skipping"; return; }
+    run ln -sfn "$src" "$d/r3" || { warn "could not link skill into $d"; return; }
+    info "skill linked -> $d/r3"
+  }
+  case "$SKILL_TARGET" in
+    claude) link_skill "$HOME/.claude/skills";;
+    codex)  link_skill "$HOME/.codex/skills";;
+    all|*)  link_skill "$HOME/.claude/skills"; link_skill "$HOME/.codex/skills";;
+  esac
+}
 phase_verify()    { info "verify (stub)"; }
 
 main() {
