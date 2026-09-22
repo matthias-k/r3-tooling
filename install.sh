@@ -23,6 +23,7 @@ SLURM_HEADNODES=()
 SLURM_SUBMIT_HOST=""
 NO_SLURM=0
 INSTALL_SKILL="prompt"      # prompt | yes | no
+SKILL_DECISION=""           # resolved skill decision (set by phase_skill)
 SKILL_TARGET="all"          # all | claude | codex
 ASSUME_YES=0
 DRY_RUN=0
@@ -322,12 +323,12 @@ EOF
   info "wrote $target"
 }
 phase_skill() {
-  local decision="$INSTALL_SKILL"
-  if [ "$decision" = "prompt" ]; then
+  SKILL_DECISION="$INSTALL_SKILL"
+  if [ "$SKILL_DECISION" = "prompt" ]; then
     local ans; prompt ans "Install the r3 agent skill (symlink into claude/codex)?" "yes"
-    [ "$ans" = "yes" ] && decision="yes" || decision="no"
+    [ "$ans" = "yes" ] && SKILL_DECISION="yes" || SKILL_DECISION="no"
   fi
-  [ "$decision" = "yes" ] || { info "skill install: skipped"; return; }
+  [ "$SKILL_DECISION" = "yes" ] || { info "skill install: skipped"; return; }
 
   local src="$REPO_DIR/skills/r3"
   link_skill() { # AGENT_DIR
@@ -380,6 +381,31 @@ phase_verify() {
   info "next: run 'source ~/.bashrc' to pick up PATH + R3_REPOSITORY"
 }
 
+# print_update_command: the exact non-interactive command that reproduces this
+# install's settings — re-run it any time to update in place, no prompts.
+print_update_command() {
+  local cmd
+  cmd="$(printf '%q' "$REPO_DIR/install.sh") --yes"
+  cmd+="$(printf ' --toolchain-root %q --venv %q --python %q --bin-dir %q --config %q --projects-dir %q --r3-repo %q --clone-proto %q --r3-ref %q --foreman-ref %q' \
+      "$TOOLCHAIN_ROOT" "$VENV_DIR" "$PYTHON_VERSION" "$BIN_DIR" "$CONFIG_PATH" "$PROJECTS_DIR" "$R3_REPO" "$CLONE_PROTO" "$R3_REF" "$FOREMAN_REF")"
+  if [ "$NO_SLURM" -eq 1 ]; then
+    cmd+=" --no-slurm"
+  else
+    local h
+    for h in "${SLURM_HEADNODES[@]:-}"; do
+      if [ -n "$h" ]; then cmd+="$(printf ' --slurm-headnode %q' "$h")"; fi
+    done
+    if [ -n "$SLURM_SUBMIT_HOST" ]; then cmd+="$(printf ' --slurm-submit-host %q' "$SLURM_SUBMIT_HOST")"; fi
+  fi
+  case "$SKILL_DECISION" in
+    yes) cmd+="$(printf ' --install-skill --skill-target %q' "$SKILL_TARGET")";;
+    no)  cmd+=" --no-install-skill";;
+  esac
+  printf '\n'
+  info "To update later (no prompts), re-run this exact command:"
+  printf '  %s\n' "$cmd"
+}
+
 main() {
   parse_args "$@"
   interactive_config
@@ -400,6 +426,7 @@ main() {
   phase_config
   phase_skill
   phase_verify
+  print_update_command
   [ "$EXIT_CODE" -eq 0 ] && info "done." || warn "finished with errors (see above)."
   exit "$EXIT_CODE"
 }

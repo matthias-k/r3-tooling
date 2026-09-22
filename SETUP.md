@@ -29,6 +29,10 @@ clone, re-syncs the editable installs, refreshes the `PATH` wrappers and the `.b
 blocks). If a clone has local changes or has diverged from its remote, that repo is skipped
 with an error rather than silently merged or overwritten — go resolve it by hand and re-run.
 
+You don't have to remember those flags: at the end of every run the installer **prints the
+exact `--yes`-flagged command that reproduces this install's settings**. Copy it (or save it
+to a small `update.sh`) and re-run it any time to update without prompts.
+
 After any run, `source ~/.bashrc` to pick up the new `PATH` and `R3_REPOSITORY`.
 
 Common flags (all have real defaults, so `--yes` alone is a complete install):
