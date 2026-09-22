@@ -161,14 +161,21 @@ no per-call `PYTHONPATH`/conda discovery.
 
 ### 3.4 R3_REPOSITORY
 
-Point `R3_REPOSITORY` at the directory that holds your r3 repo (created if it doesn't exist
-yet):
+Create and initialize the repository (an empty directory is **not** a valid repo — `r3 init`
+writes the `r3.yaml` it needs, and refuses a path that already exists):
+
+```bash
+r3 init "$HOME/r3_repo"
+```
+
+then point `R3_REPOSITORY` at it in `~/.bashrc`, alongside the `PATH` line from 3.3:
 
 ```bash
 export R3_REPOSITORY="$HOME/r3_repo"
 ```
 
-in `~/.bashrc`, alongside the `PATH` line from 3.3.
+(The installer does both for you: it runs `r3 init` when the repo is absent, or heals a
+leftover empty directory in place.)
 
 ## 4. Config (pathmap + slurm)
 

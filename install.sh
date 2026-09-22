@@ -278,9 +278,25 @@ phase_wrappers() {
 phase_config() {
   info "config: $CONFIG_PATH"
   local abs_projects; abs_projects="$(cd "$PROJECTS_DIR" 2>/dev/null && pwd || realpath -m "$PROJECTS_DIR" 2>/dev/null || echo "$PROJECTS_DIR")"
-  # ensure R3_REPOSITORY dir + export.
-  run mkdir -p "$R3_REPO" \
-    || { err "cannot create R3_REPOSITORY dir $R3_REPO"; exit 1; }
+  # initialize the R3_REPOSITORY. An empty dir is NOT a valid repo — r3 needs an
+  # r3.yaml, created by `r3 init` (which refuses a pre-existing path).
+  if [ -f "$R3_REPO/r3.yaml" ]; then
+    info "R3_REPOSITORY already initialized: $R3_REPO"
+  elif [ -e "$R3_REPO" ]; then
+    if [ -d "$R3_REPO" ] && [ -z "$(ls -A "$R3_REPO" 2>/dev/null)" ]; then
+      info "initializing empty R3_REPOSITORY: $R3_REPO"
+      run rmdir "$R3_REPO" && run "$VENV_DIR/bin/r3" init "$R3_REPO" \
+        || { err "failed to initialize r3 repository at $R3_REPO"; exit 1; }
+    else
+      err "$R3_REPO exists but is not an r3 repository (no r3.yaml) and is not empty;"
+      err "refusing to touch it — remove it or pass a different --r3-repo."
+      EXIT_CODE=1
+    fi
+  else
+    info "initializing R3_REPOSITORY: $R3_REPO"
+    run "$VENV_DIR/bin/r3" init "$R3_REPO" \
+      || { err "failed to initialize r3 repository at $R3_REPO"; exit 1; }
+  fi
   ensure_bashrc_block "r3-toolchain R3_REPOSITORY" "export R3_REPOSITORY=\"$R3_REPO\""
 
   local target
