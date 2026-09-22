@@ -332,15 +332,20 @@ EOF
 phase_verify() {
   info "verify"
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf '  [dry-run] would run: which r3 xr3 xr3-slurm foreman; each --help\n'
+    printf '  [dry-run] would run: <bin>/{r3,xr3,xr3-slurm,foreman} --help + a PATH subprocess check\n'
   else
-    export PATH="$BIN_DIR:$PATH"
     local ok=1
+    # Check the wrappers we just wrote by ABSOLUTE PATH. Resolving bare names
+    # here would hit any r3/xr3 shell functions in the caller's environment
+    # (which can even `exec`, replacing this process mid-verify).
     for t in r3 xr3 xr3-slurm foreman; do
-      if command -v "$t" >/dev/null 2>&1; then info "found $t -> $(command -v "$t")"; else err "missing on PATH: $t"; ok=0; fi
+      if [ -x "$BIN_DIR/$t" ]; then info "found $t -> $BIN_DIR/$t"; else err "missing wrapper: $BIN_DIR/$t"; ok=0; fi
     done
-    for t in xr3 xr3-slurm; do "$t" --help >/dev/null 2>&1 && info "$t --help ok" || { err "$t --help failed"; ok=0; }; done
-    python3 -c "import subprocess,sys; sys.exit(subprocess.run(['xr3','--help'],stdout=subprocess.DEVNULL).returncode)" \
+    for t in xr3 xr3-slurm; do
+      "$BIN_DIR/$t" --help >/dev/null 2>&1 && info "$t --help ok" || { err "$t --help failed"; ok=0; }
+    done
+    # subprocess resolution via PATH (execvp ignores shell functions/aliases):
+    PATH="$BIN_DIR:$PATH" python3 -c "import subprocess,sys; sys.exit(subprocess.run(['xr3','--help'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode)" \
       && info "xr3 resolves from a subprocess" || { err "xr3 not resolvable from subprocess"; ok=0; }
     [ "$ok" -eq 1 ] || EXIT_CODE=1
   fi
