@@ -310,7 +310,37 @@ phase_skill() {
     all|*)  link_skill "$HOME/.claude/skills"; link_skill "$HOME/.codex/skills";;
   esac
 }
-phase_verify()    { info "verify (stub)"; }
+print_remote_foreman() {
+  local host="${SLURM_SUBMIT_HOST:-${SLURM_HEADNODES[0]:-<cluster-host>}}"
+  cat <<EOF
+
+--- remote-foreman launcher (copy to your LAPTOP; not installed here) ---
+# Opens the cluster's foreman in your local browser via an SSH tunnel.
+ssh -L 8080:localhost:8080 $host \\
+  'R3_REPOSITORY="$R3_REPO" "$BIN_DIR/foreman" --port 8080'
+# then browse: http://localhost:8080
+------------------------------------------------------------------------
+EOF
+}
+
+phase_verify() {
+  info "verify"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '  [dry-run] would run: which r3 xr3 xr3-slurm foreman; each --help\n'
+  else
+    export PATH="$BIN_DIR:$PATH"
+    local ok=1
+    for t in r3 xr3 xr3-slurm foreman; do
+      if command -v "$t" >/dev/null 2>&1; then info "found $t -> $(command -v "$t")"; else err "missing on PATH: $t"; ok=0; fi
+    done
+    for t in xr3 xr3-slurm; do "$t" --help >/dev/null 2>&1 && info "$t --help ok" || { err "$t --help failed"; ok=0; }; done
+    python3 -c "import subprocess,sys; sys.exit(subprocess.run(['xr3','--help'],stdout=subprocess.DEVNULL).returncode)" \
+      && info "xr3 resolves from a subprocess" || { err "xr3 not resolvable from subprocess"; ok=0; }
+    [ "$ok" -eq 1 ] || EXIT_CODE=1
+  fi
+  print_remote_foreman
+  info "next: run 'source ~/.bashrc' to pick up PATH + R3_REPOSITORY"
+}
 
 main() {
   parse_args "$@"
