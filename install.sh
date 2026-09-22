@@ -36,6 +36,10 @@ usage() {
 
 Usage: ./install.sh [flags]
 
+Run with no flags on a terminal to be prompted for the settings below (press
+Enter to accept each default). --yes (or any non-interactive stdin) skips all
+prompts and uses defaults/flags.
+
 Layout:
   --toolchain-root DIR   (default ~/r3-toolchain) clones + venv live here
   --venv DIR             (default <toolchain-root>/.venv)
@@ -115,13 +119,36 @@ parse_args() {
   done
 }
 
+# _default_bindir: ~/bin, or $LUSTREWORK/bin if that shared dir exists.
+_default_bindir() {
+  if [ -n "${LUSTREWORK:-}" ] && [ -d "${LUSTREWORK:-}/bin" ]; then echo "$LUSTREWORK/bin"; else echo "$HOME/bin"; fi
+}
+
+# interactive_config: prompt for the main settings (Enter accepts each [default]).
+# A no-op under --yes or a non-interactive stdin (prompt returns the default),
+# so a fully-flagged or --yes run stays non-interactive.
+interactive_config() {
+  if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
+    info "Configure the install (press Enter to accept each [default]):"
+  fi
+  prompt CLONE_PROTO    "  git clone protocol (ssh/https)" "$CLONE_PROTO"
+  prompt TOOLCHAIN_ROOT "  toolchain root (r3+foreman clones and the venv live here)" "$TOOLCHAIN_ROOT"
+  prompt BIN_DIR        "  bin dir for wrappers (must be on PATH)" "${BIN_DIR:-$(_default_bindir)}"
+  prompt PROJECTS_DIR   "  projects dir (written as the pathmap base root)" "$PROJECTS_DIR"
+  prompt R3_REPO        "  R3_REPOSITORY (job repository) location" "$R3_REPO"
+  prompt CONFIG_PATH    "  xr3 config file path" "$CONFIG_PATH"
+  # SLURM: ask only when not already decided by flags, and only interactively.
+  if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ] && [ "$NO_SLURM" -eq 0 ] && [ "${#SLURM_HEADNODES[@]}" -eq 0 ]; then
+    local hn=""; read -r -p "  SLURM head node for xr3-slurm (blank = no SLURM): " hn || true
+    if [ -n "$hn" ]; then SLURM_HEADNODES=("$hn"); else NO_SLURM=1; fi
+  fi
+}
+
 resolve_defaults() {
   case "$CLONE_PROTO" in ssh|https) ;; *) err "--clone-proto must be ssh or https (got: $CLONE_PROTO)"; exit 2;; esac
   case "$SKILL_TARGET" in all|claude|codex) ;; *) err "--skill-target must be all|claude|codex (got: $SKILL_TARGET)"; exit 2;; esac
   [ -n "$VENV_DIR" ] || VENV_DIR="$TOOLCHAIN_ROOT/.venv"
-  if [ -z "$BIN_DIR" ]; then
-    if [ -n "${LUSTREWORK:-}" ] && [ -d "${LUSTREWORK:-}/bin" ]; then BIN_DIR="$LUSTREWORK/bin"; else BIN_DIR="$HOME/bin"; fi
-  fi
+  [ -n "$BIN_DIR" ] || BIN_DIR="$(_default_bindir)"
   local host="github.com"
   if [ -z "$R3_REMOTE" ]; then
     [ "$CLONE_PROTO" = "https" ] && R3_REMOTE="https://$host/mtangemann/r3.git" || R3_REMOTE="git@$host:mtangemann/r3.git"
@@ -355,9 +382,17 @@ phase_verify() {
 
 main() {
   parse_args "$@"
+  interactive_config
   resolve_defaults
   info "r3 toolchain installer (dry-run=$DRY_RUN)"
   info "toolchain-root=$TOOLCHAIN_ROOT venv=$VENV_DIR bin=$BIN_DIR config=$CONFIG_PATH"
+  local slurm_desc="none"
+  [ "$NO_SLURM" -eq 1 ] || slurm_desc="${SLURM_HEADNODES[*]:-<empty>}"
+  info "projects=$PROJECTS_DIR r3-repo=$R3_REPO clone-proto=$CLONE_PROTO slurm=$slurm_desc"
+  if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ] && [ "$DRY_RUN" -eq 0 ]; then
+    local go=""; read -r -p "Proceed with these settings? [yes]: " go || true
+    case "${go:-yes}" in y|Y|yes|YES) ;; *) info "aborted."; exit 0;; esac
+  fi
   phase_preflight
   phase_clones
   phase_venv
