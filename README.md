@@ -46,7 +46,24 @@ Vendored in [`extensions/`](extensions/README.md):
 conventions, SLURM config, …). Those, and what breaks without them, are the single source of truth in
 **[`extensions/CONTRACT.md`](extensions/CONTRACT.md)** — read it before pointing the tools at your jobs.
 
-To install the **full toolchain** (r3 + xr3/xr3-slurm + foreman) — one command or manual steps — see **[`SETUP.md`](SETUP.md)** (`./install.sh --yes`).
+### Install the full toolchain
+
+Clone the repo and run the installer — one command sets up r3 + xr3/xr3-slurm + foreman:
+
+```bash
+git clone git@github.com:matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
+```
+
+`./install.sh` prompts for the locations (press Enter to accept each default); add `--yes` to take all
+defaults non-interactively, or `--dry-run` to preview. It creates a `uv` venv with r3 + foreman, PATH
+wrappers (`r3`, `xr3`, `xr3-slurm`, `foreman`), an `xr3.yaml`, and an initialized `R3_REPOSITORY`, and
+writes a `~/r3-toolchain/update.sh` you can re-run any time to update. Flags, manual steps, SLURM, and the
+foreman tunnel are in **[`SETUP.md`](SETUP.md)**.
+
+> The one-liner clones rather than `curl | bash`-ing a lone script because `install.sh` needs the checked-out
+> repo (it wires up `extensions/` and `skills/r3`). `r3` is public; `foreman` and this repo are private for
+> now, so cloning needs SSH access to GitHub (use `--clone-proto https` for the public parts only).
+
 What's next (the `xr3` skill, folding in `RESEARCH_WORKFLOW.md`, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
 
 ## Layout
