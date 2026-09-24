@@ -27,8 +27,9 @@ git clone git@github.com:matthias-k/r3-tooling.git r3-tooling && cd r3-tooling
 `install.sh` from a *different* clone (like the one you just made above), it creates/uses the
 canonical clone and re-runs from there, so the wrappers, the skill symlink, and `update.sh` all
 point at one place — the clone you started from is then disposable. Use `--no-relocate` to run a
-clone in place. Once this repo is public, `bootstrap.sh` makes the first install a one-liner:
-`curl -fsSL <raw-url>/bootstrap.sh | bash` (it asks for the toolchain dir and clones there for you).
+clone in place. `bootstrap.sh` makes the first install a one-liner:
+`curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash`
+(it asks for the toolchain dir and clones there for you).
 
 `./install.sh --help` lists every flag. The installer is **idempotent**: every interactive
 prompt has a matching flag, so a saved, fully-flagged command (or `--yes`) doesn't just do a

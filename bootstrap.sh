@@ -11,7 +11,7 @@ set -euo pipefail
 
 TOOLCHAIN_ROOT=""
 BRANCH="main"
-R3TOOLING_REMOTE="git@github.com:matthias-k/r3-tooling.git"
+R3TOOLING_REMOTE="https://github.com/matthias-k/r3-tooling.git"   # public; override with --r3-tooling-remote
 ASSUME_YES=0
 FORWARD=()
 
