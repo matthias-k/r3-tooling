@@ -109,7 +109,8 @@ Dotted keys address nested JSON: `{"task_meta.seed": 42}` compiles to
 
 ## Result ordering
 
-Query results are in **unspecified order** unless `latest=True` (API) / `--latest` (CLI),
-which returns the single newest job by `timestamp`. A plain `find` has no `ORDER BY`; do not
-read its order as meaningful (see `gotchas.md`). Sort by `timestamp` yourself if you need an
-order.
+Query results come back **oldest-first by `timestamp`** (`ORDER BY timestamp ASC, id ASC`; the
+`id` tie-break makes the order deterministic and independent of `rebuild-index`). `latest=True`
+(API) / `--latest` (CLI) returns the single newest job instead (`timestamp DESC, id DESC LIMIT
+1`). The order is *timestamp* order, not insertion order — sort client-side if you need a
+different key.

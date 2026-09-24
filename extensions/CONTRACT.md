@@ -30,6 +30,12 @@ itself — only by these tools.
   *Breaks:* the command exits with a `No pathmap root matches <path> … (see CONTRACT.md)` error. (`find` and
   `files` do **not** need pathmap. Also skip it: `diff --compare-to <id>` compares two committed jobs
   directly, and `commit --no-check` skips the check that resolves the path.)
+
+  A `pathmap.roots` entry with no `prefix` is a **base root**: subpaths map directly
+  (the first sub-directory becomes the first r3-path segment), so a single base root over
+  your projects directory covers every project beneath it, and multiple base roots share
+  one path space. `~` and `$VARS` in `path` are expanded. Running xr3 in a directory that
+  *is* a root (no sub-path) is an error.
 - **`metadata.path` matches the job's logical location**, and **`tags[0]` = `<path>/vX.Y.Z`** (the primary
   version tag is the path plus a semver). *Breaks:* `xr3 check` fails its path- and tag-consistency asserts
   (and `commit` runs `check` by default).

@@ -18,6 +18,16 @@ Query-operator traps live in `query-grammar.md`, not here.
   you cannot unlink its contents; `rm -rf` errors and **short-circuits a `&&` chain**. To
   delete one, use `r3 remove`, or `chmod -R +w <jobdir>` first. (`r3 remove` restores write
   bits internally before deleting.)
+- **Symlinks and special files aren't preserved — `commit` alters them silently.** A file
+  symlink is **dereferenced** (its target's content is stored as a plain file), a directory
+  symlink is **followed and flattened** into the job, a broken symlink is **dropped**, and
+  FIFOs/sockets/devices aren't handled. The link itself is never kept, with no warning —
+  materialize anything reached through a symlink before committing. (A fail-closed guard, then
+  proper symlink support, are on r3's roadmap.)
+- **Empty directories aren't preserved.** A job's file set is a list of *files*, so an
+  otherwise-empty directory won't survive commit/checkout — the conventional `output/` is the
+  one exception (always present). If your code depends on a directory existing, put at least one
+  file in it.
 
 ## Checkout
 
@@ -73,11 +83,11 @@ Query-operator traps live in `query-grammar.md`, not here.
 
 ## Find & query
 
-- **`r3 find` returns rows in unstable order unless `--latest`.** The query has no
-  `ORDER BY` except when `--latest`/`latest=True` is set (then `ORDER BY timestamp DESC LIMIT
-  1`); `rebuild-index` re-inserts jobs in filesystem-iteration order, visibly reshuffling the
-  results. **Never read `find` output as a timeline** — use `--latest`, or sort by
-  `timestamp` yourself.
+- **`r3 find` orders rows oldest-first by timestamp** (`ORDER BY timestamp ASC, id ASC`; the
+  `id` tie-break keeps it deterministic and independent of `rebuild-index`). `--latest` /
+  `latest=True` returns the single newest instead (`timestamp DESC, id DESC LIMIT 1`). The order
+  is stable, but it's *timestamp* order, not insertion order — sort client-side if you need a
+  different key.
 - **`find` serves index-cached metadata.** Results come from the SQLite index, not a fresh
   read of each `metadata.yaml`. If you edit a job's `metadata.yaml` directly and skip
   `r3 rebuild-index` (or `r3 edit`, which reindexes for you), `find` keeps returning the
@@ -95,6 +105,23 @@ Query-operator traps live in `query-grammar.md`, not here.
   unindexed job** in `jobs/` — and because `rebuild-index` deletes the index and re-reads every
   job, that one orphan then makes `rebuild-index` itself fail (leaving `find` empty) until you
   `r3 remove <id>` it. **Quote dates** (and any other non-JSON scalar) so they store as strings.
+- **`r3.yaml` is r3-managed — don't hand-format it.** `r3 init` and format migrations rewrite it
+  by re-serializing the parsed config, which drops comments, blank lines, and key order (and
+  `commit` writes a freshly-serialized recipe into the stored job). Author your dependencies
+  there, but keep any explanatory notes elsewhere — formatting won't round-trip.
+
+## Concurrency & durability
+
+- **One mutating process per repository — no locking.** r3 assumes a single writer.
+  Concurrent mutations — two `commit`s, or `rebuild-index` overlapping a `commit`/`remove` — are
+  unsupported and can **corrupt the index**. The index is disposable: `r3 rebuild-index` rebuilds
+  it from the jobs on disk. (Enforced locking is unscheduled — `flock` is unreliable on the
+  network filesystems r3 often runs on.)
+- **Safe to interrupt, not power-loss durable.** Operations are safe to `Ctrl-C`/kill and re-run,
+  but files aren't `fsync`-ed, so a host power loss mid-operation can lose or truncate a
+  just-written file. After an unclean shutdown, re-run the interrupted command (then
+  `r3 rebuild-index`). SQLite commits are `fsync`-durable and the index is rebuildable, so the
+  exposed surface is the transient local-copy steps.
 
 ## Errors
 

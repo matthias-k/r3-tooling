@@ -8,7 +8,7 @@ Import as `import r3`. The two entry points are `r3.Repository(path)` (the job g
 ```python
 repo = r3.Repository("/path/to/repo")          # opens an existing repository
 
-repo.find(query, latest=False)   -> list[Job]  # Mongo-style query; latest=True -> newest one
+repo.find(query, latest=False)   -> list[Job]  # Mongo-style query, oldest-first by timestamp; latest=True -> newest one
 repo.jobs()                      -> Iterable[Job]  # every job (== repo.find({}))
 repo.commit(job)                 -> Job         # freezes a Job, returns the stored Job (with .id)
 repo.checkout(item, path)        -> None        # materialize a Job or dependency into path

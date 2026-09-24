@@ -5,6 +5,9 @@ live in the linked docs (this file is the map, not the spec).
 
 ## Done
 
+- **Full-toolchain installer** — `install.sh` (uv venv, editable r3+foreman, PATH wrappers,
+  base-root config, optional skill install; re-run = update) + `SETUP.md` rewrite + the
+  `xr3` base-root pathmap change. See `docs/specs/2026-09-16-full-toolchain-install-design.md`.
 - **xr3 extraction & hardening** — the galvani `xr3` monolith split into the shareable
   `xr3` / `xr3-slurm` suite (config-externalized, SLURM separated, `xr3diff.py` extracted),
   documented (`extensions/CONTRACT.md` + per-tool READMEs + `SETUP.md`), merged to `main`.
@@ -41,3 +44,7 @@ MLCloud-general → SLURM-general) lives in **`docs/specs/2026-08-22-xr3-extract
 
 - The pure `skills/r3/` skill — kept upstream-ready; remote-storage held out for now (see
   the top `README.md` status).
+- **Cross-user readability of committed jobs** — commit preserves restrictive read bits, so a
+  job can be readable by its owner but not by others; enforcement (a configurable `xr3 check` /
+  `commit` step) belongs with decentralized sharing, not a standalone check. Mechanics + future
+  hook: [`docs/ideas/cross-user-readability.md`](docs/ideas/cross-user-readability.md).

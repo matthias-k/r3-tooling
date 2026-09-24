@@ -46,7 +46,29 @@ Vendored in [`extensions/`](extensions/README.md):
 conventions, SLURM config, …). Those, and what breaks without them, are the single source of truth in
 **[`extensions/CONTRACT.md`](extensions/CONTRACT.md)** — read it before pointing the tools at your jobs.
 
-To install the CLI tools (the Python env, the `PATH` wrappers, and the config), see **[`SETUP.md`](SETUP.md)**.
+### Install the full toolchain
+
+One command sets up r3 + xr3/xr3-slurm + foreman:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash
+```
+
+`bootstrap.sh` asks for a toolchain directory and installs everything under it: a `uv` venv with r3 +
+foreman, the `r3` / `xr3` / `xr3-slurm` / `foreman` commands on your `PATH`, an `xr3.yaml`, and an
+initialized `R3_REPOSITORY`. Add `--yes` for all defaults, or `--dry-run` to preview.
+
+> Prefer to clone first (to read the script or hack on it)? Same result:
+> ```bash
+> git clone https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
+> ```
+> `r3` and `r3-tooling` are public; `foreman` is still private, so its clone needs GitHub access — the
+> installer's default `--clone-proto ssh` handles that.
+
+Re-run any time to update — the installer saves a `<toolchain-root>/update.sh` for exactly that. Everything
+lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?" confusion. Full
+details — flags, manual steps, SLURM, the foreman tunnel — are in **[`SETUP.md`](SETUP.md)**.
+
 What's next (the `xr3` skill, folding in `RESEARCH_WORKFLOW.md`, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
 
 ## Layout
