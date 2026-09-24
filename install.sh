@@ -22,12 +22,16 @@ FOREMAN_REF="main"
 SLURM_HEADNODES=()
 SLURM_SUBMIT_HOST=""
 NO_SLURM=0
-INSTALL_SKILL="prompt"      # prompt | yes | no
-SKILL_DECISION=""           # resolved skill decision (set by phase_skill)
+INSTALL_SKILL="prompt"      # prompt | yes | no (resolved to yes/no in interactive_config)
 SKILL_TARGET="all"          # all | claude | codex
 ASSUME_YES=0
 DRY_RUN=0
 NO_UPDATE=0
+NO_RELOCATE="${R3_NO_RELOCATE:-0}"   # 1 = run this clone in place, don't relocate
+
+# track which promptable settings were given explicitly, so we don't re-ask them
+CLONE_PROTO_SET=0; TOOLCHAIN_ROOT_SET=0; BIN_DIR_SET=0
+PROJECTS_DIR_SET=0; R3_REPO_SET=0; CONFIG_PATH_SET=0
 
 EXIT_CODE=0                 # phases set this to 1 on non-fatal errors (e.g. skipped repo)
 
@@ -65,7 +69,12 @@ Modes:
   --yes         accept defaults, no prompts
   --dry-run     print actions, change nothing
   --no-update   on re-run, skip git pulls (only re-ensure env/wrappers/config)
+  --no-relocate run THIS clone in place; don't relocate to <toolchain-root>/r3-tooling
   -h, --help
+
+By default the installer works from a single canonical clone at
+<toolchain-root>/r3-tooling: if launched from another clone it ensures that one
+exists and re-runs from it, so wrappers/skill/update.sh all point at one place.
 EOF
 }
 
@@ -93,14 +102,14 @@ reqval() { [ "$#" -ge 2 ] || { err "missing value for $1"; exit 2; }; }
 parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
-      --toolchain-root) reqval "$@"; TOOLCHAIN_ROOT="$2"; shift 2;;
+      --toolchain-root) reqval "$@"; TOOLCHAIN_ROOT="$2"; TOOLCHAIN_ROOT_SET=1; shift 2;;
       --venv) reqval "$@"; VENV_DIR="$2"; shift 2;;
       --python) reqval "$@"; PYTHON_VERSION="$2"; shift 2;;
-      --bin-dir) reqval "$@"; BIN_DIR="$2"; shift 2;;
-      --config) reqval "$@"; CONFIG_PATH="$2"; shift 2;;
-      --projects-dir) reqval "$@"; PROJECTS_DIR="$2"; shift 2;;
-      --r3-repo) reqval "$@"; R3_REPO="$2"; shift 2;;
-      --clone-proto) reqval "$@"; CLONE_PROTO="$2"; shift 2;;
+      --bin-dir) reqval "$@"; BIN_DIR="$2"; BIN_DIR_SET=1; shift 2;;
+      --config) reqval "$@"; CONFIG_PATH="$2"; CONFIG_PATH_SET=1; shift 2;;
+      --projects-dir) reqval "$@"; PROJECTS_DIR="$2"; PROJECTS_DIR_SET=1; shift 2;;
+      --r3-repo) reqval "$@"; R3_REPO="$2"; R3_REPO_SET=1; shift 2;;
+      --clone-proto) reqval "$@"; CLONE_PROTO="$2"; CLONE_PROTO_SET=1; shift 2;;
       --r3-remote) reqval "$@"; R3_REMOTE="$2"; shift 2;;
       --foreman-remote) reqval "$@"; FOREMAN_REMOTE="$2"; shift 2;;
       --r3-ref) reqval "$@"; R3_REF="$2"; shift 2;;
@@ -114,6 +123,7 @@ parse_args() {
       --yes|-y) ASSUME_YES=1; shift;;
       --dry-run) DRY_RUN=1; shift;;
       --no-update) NO_UPDATE=1; shift;;
+      --no-relocate) NO_RELOCATE=1; shift;;
       -h|--help) usage; exit 0;;
       *) err "unknown flag: $1"; usage; exit 2;;
     esac
@@ -132,16 +142,26 @@ interactive_config() {
   if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
     info "Configure the install (press Enter to accept each [default]):"
   fi
-  prompt CLONE_PROTO    "  git clone protocol (ssh/https)" "$CLONE_PROTO"
-  prompt TOOLCHAIN_ROOT "  toolchain root (r3+foreman clones and the venv live here)" "$TOOLCHAIN_ROOT"
-  prompt BIN_DIR        "  bin dir for wrappers (must be on PATH)" "${BIN_DIR:-$(_default_bindir)}"
-  prompt PROJECTS_DIR   "  projects dir (written as the pathmap base root)" "$PROJECTS_DIR"
-  prompt R3_REPO        "  R3_REPOSITORY (job repository) location" "$R3_REPO"
-  prompt CONFIG_PATH    "  xr3 config file path" "$CONFIG_PATH"
+  # A setting given explicitly on the command line is not re-asked.
+  [ "$CLONE_PROTO_SET" -eq 1 ]    || prompt CLONE_PROTO    "  git clone protocol (ssh/https)" "$CLONE_PROTO"
+  [ "$TOOLCHAIN_ROOT_SET" -eq 1 ] || prompt TOOLCHAIN_ROOT "  toolchain root (r3+foreman clones and the venv live here)" "$TOOLCHAIN_ROOT"
+  [ "$BIN_DIR_SET" -eq 1 ]        || prompt BIN_DIR        "  bin dir for wrappers (must be on PATH)" "${BIN_DIR:-$(_default_bindir)}"
+  [ "$PROJECTS_DIR_SET" -eq 1 ]   || prompt PROJECTS_DIR   "  projects dir (written as the pathmap base root)" "$PROJECTS_DIR"
+  [ "$R3_REPO_SET" -eq 1 ]        || prompt R3_REPO        "  R3_REPOSITORY (job repository) location" "$R3_REPO"
+  [ "$CONFIG_PATH_SET" -eq 1 ]    || prompt CONFIG_PATH    "  xr3 config file path" "$CONFIG_PATH"
   # SLURM: ask only when not already decided by flags, and only interactively.
   if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ] && [ "$NO_SLURM" -eq 0 ] && [ "${#SLURM_HEADNODES[@]}" -eq 0 ]; then
     local hn=""; read -r -p "  SLURM head node for xr3-slurm (blank = no SLURM): " hn || true
     if [ -n "$hn" ]; then SLURM_HEADNODES=("$hn"); else NO_SLURM=1; fi
+  fi
+  # Skill decision (resolve "prompt" -> yes/no now, so it happens before any relocate).
+  if [ "$INSTALL_SKILL" = "prompt" ]; then
+    if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
+      local a=""; read -r -p "  install the r3 agent skill for claude/codex? (yes/no) [yes]: " a || true
+      case "${a:-yes}" in y|Y|yes|YES) INSTALL_SKILL=yes;; *) INSTALL_SKILL=no;; esac
+    else
+      INSTALL_SKILL=yes
+    fi
   fi
 }
 
@@ -339,12 +359,8 @@ EOF
   info "wrote $target"
 }
 phase_skill() {
-  SKILL_DECISION="$INSTALL_SKILL"
-  if [ "$SKILL_DECISION" = "prompt" ]; then
-    local ans; prompt ans "Install the r3 agent skill (symlink into claude/codex)?" "yes"
-    [ "$ans" = "yes" ] && SKILL_DECISION="yes" || SKILL_DECISION="no"
-  fi
-  [ "$SKILL_DECISION" = "yes" ] || { info "skill install: skipped"; return; }
+  # INSTALL_SKILL is resolved to yes/no in interactive_config (or by a flag).
+  [ "$INSTALL_SKILL" = "yes" ] || { info "skill install: skipped"; return; }
 
   local src="$REPO_DIR/skills/r3"
   link_skill() { # AGENT_DIR
@@ -411,7 +427,7 @@ _update_flags() {
     done
     if [ -n "$SLURM_SUBMIT_HOST" ]; then f+="$(printf ' --slurm-submit-host %q' "$SLURM_SUBMIT_HOST")"; fi
   fi
-  case "$SKILL_DECISION" in
+  case "$INSTALL_SKILL" in
     yes) f+="$(printf ' --install-skill --skill-target %q' "$SKILL_TARGET")";;
     no)  f+=" --no-install-skill";;
   esac
@@ -448,6 +464,40 @@ print_update_command() {
   fi
 }
 
+# relocate_if_needed: ensure we run from the single canonical clone at
+# <toolchain-root>/r3-tooling. If launched from another clone, create/refresh the
+# canonical one and re-exec it non-interactively with the settings just gathered —
+# so wrappers, the skill symlink and update.sh all reference one stable location.
+relocate_if_needed() {
+  [ "$NO_RELOCATE" = "1" ] && return
+  local canon="$TOOLCHAIN_ROOT/r3-tooling"
+  local canon_abs; canon_abs="$(cd "$canon" 2>/dev/null && pwd || echo "$canon")"
+  [ "$REPO_DIR" = "$canon_abs" ] && return   # already canonical
+
+  info "canonical r3-tooling clone: $canon"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "(dry-run) would ensure that clone and re-run from it; previewing in place"
+    return
+  fi
+  if [ ! -d "$canon/.git" ]; then
+    local origin branch
+    origin="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
+    branch="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+    [ -n "$origin" ] || { err "cannot determine r3-tooling origin to create the canonical clone at $canon"; exit 1; }
+    mkdir -p "$TOOLCHAIN_ROOT" || { err "cannot create toolchain root $TOOLCHAIN_ROOT"; exit 1; }
+    info "cloning r3-tooling ($branch) -> $canon"
+    git clone --branch "$branch" "$origin" "$canon" || { err "failed to clone canonical r3-tooling from $origin"; exit 1; }
+  elif [ -z "$(cd "$canon" && git status --porcelain)" ]; then
+    git -C "$canon" pull --ff-only || warn "could not fast-forward $canon; using it as-is"
+  else
+    warn "$canon has local changes; using it as-is"
+  fi
+  info "re-running the installer from the canonical clone"
+  local flags; flags="$(_update_flags)"
+  # $flags is %q-quoted content we generated; eval re-parses it safely.
+  eval "exec env R3_NO_RELOCATE=1 $(printf '%q' "$canon/install.sh") $flags"
+}
+
 main() {
   parse_args "$@"
   interactive_config
@@ -461,6 +511,7 @@ main() {
     local go=""; read -r -p "Proceed with these settings? [yes]: " go || true
     case "${go:-yes}" in y|Y|yes|YES) ;; *) info "aborted."; exit 0;; esac
   fi
+  relocate_if_needed
   phase_preflight
   phase_clones
   phase_venv
