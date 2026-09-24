@@ -48,34 +48,25 @@ conventions, SLURM config, …). Those, and what breaks without them, are the si
 
 ### Install the full toolchain
 
-Clone the repo and run the installer — one command sets up r3 + xr3/xr3-slurm + foreman:
-
-```bash
-git clone git@github.com:matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
-```
-
-`./install.sh` prompts for the locations (press Enter to accept each default); add `--yes` to take all
-defaults non-interactively, or `--dry-run` to preview. It creates a `uv` venv with r3 + foreman, PATH
-wrappers (`r3`, `xr3`, `xr3-slurm`, `foreman`), an `xr3.yaml`, and an initialized `R3_REPOSITORY`, and
-writes a `<toolchain-root>/update.sh` you can re-run any time to update. Flags, manual steps, SLURM, and the
-foreman tunnel are in **[`SETUP.md`](SETUP.md)**.
-
-**One canonical clone.** The toolchain works from a single clone at `<toolchain-root>/r3-tooling` (default
-`~/r3-toolchain/r3-tooling`, alongside the `r3`/`foreman` clones it manages). If you run `install.sh` from
-some other clone, it creates/uses that canonical one and re-runs from it — so the wrappers, the skill
-symlink, and `update.sh` all point at one place (no "which clone?" confusion). The initial clone you made
-to get `install.sh` is then disposable. Pass `--no-relocate` to run a clone in place instead.
-
-Once this repo is public, the first install becomes a true one-liner via **`bootstrap.sh`** (it asks for the
-toolchain dir, clones into `<toolchain-root>/r3-tooling`, and runs the installer):
+One command sets up r3 + xr3/xr3-slurm + foreman:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mtangemann/r3-tooling/main/bootstrap.sh | bash
 ```
 
-> The install can't be a `curl | bash` of a lone `install.sh` because it needs the checked-out repo (it wires
-> up `extensions/` and `skills/r3`) — hence a clone. `r3` is public; `foreman` and this repo are private for
-> now, so cloning needs SSH access to GitHub (use `--clone-proto https` for the public parts only).
+`bootstrap.sh` asks for a toolchain directory and installs everything under it: a `uv` venv with r3 +
+foreman, the `r3` / `xr3` / `xr3-slurm` / `foreman` commands on your `PATH`, an `xr3.yaml`, and an
+initialized `R3_REPOSITORY`. Add `--yes` for all defaults, or `--dry-run` to preview.
+
+> **While this repo is private,** clone it first and run the installer directly (same result):
+> ```bash
+> git clone git@github.com:matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
+> ```
+> Cloning needs SSH access to GitHub (`r3` is public; `foreman` and this repo are private for now).
+
+Re-run any time to update — the installer saves a `<toolchain-root>/update.sh` for exactly that. Everything
+lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?" confusion. Full
+details — flags, manual steps, SLURM, the foreman tunnel — are in **[`SETUP.md`](SETUP.md)**.
 
 What's next (the `xr3` skill, folding in `RESEARCH_WORKFLOW.md`, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
 
