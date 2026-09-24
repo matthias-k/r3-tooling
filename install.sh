@@ -175,7 +175,9 @@ resolve_defaults() {
     [ "$CLONE_PROTO" = "https" ] && R3_REMOTE="https://$host/mtangemann/r3.git" || R3_REMOTE="git@$host:mtangemann/r3.git"
   fi
   if [ -z "$FOREMAN_REMOTE" ]; then
-    [ "$CLONE_PROTO" = "https" ] && FOREMAN_REMOTE="https://$host/mtangemann/foreman.git" || FOREMAN_REMOTE="git@$host:mtangemann/foreman.git"
+    # foreman's upstream (mtangemann) is private and colleagues may lack access;
+    # default to the matthias-k fork, which access can be granted on. Override with --foreman-remote.
+    [ "$CLONE_PROTO" = "https" ] && FOREMAN_REMOTE="https://$host/matthias-k/foreman.git" || FOREMAN_REMOTE="git@$host:matthias-k/foreman.git"
   fi
 }
 
