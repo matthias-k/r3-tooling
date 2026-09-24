@@ -67,9 +67,11 @@ Common flags (all have real defaults, so `--yes` alone is a complete install):
 - `--install-skill` / `--no-install-skill` (plus `--skill-target all|claude|codex`) — install
   the r3 agent skill from §0 as part of the same run.
 
-`foreman` is currently a **private** repo, so the default `ssh` clone proto needs your GitHub
-SSH key set up (the installer checks this in preflight and warns if it can't confirm access).
-Once `foreman` is public, `--clone-proto https` works without any key setup.
+`foreman` is currently **private** — the installer defaults to the `matthias-k/foreman` fork
+(ask the owner for access), and the default `ssh` clone proto needs your GitHub SSH key set up
+(the installer checks this in preflight and warns if it can't confirm access). Point
+`--foreman-remote` elsewhere if you have another source; once `foreman` is public,
+`--clone-proto https` works without any key setup.
 
 ## 2. What gets installed
 
@@ -112,7 +114,7 @@ uv venv --python 3.12 ~/r3-toolchain/.venv
 
 ```bash
 git clone git@github.com:mtangemann/r3.git ~/r3-toolchain/r3
-git clone git@github.com:mtangemann/foreman.git ~/r3-toolchain/foreman   # private repo — needs ssh access
+git clone git@github.com:matthias-k/foreman.git ~/r3-toolchain/foreman   # private fork — needs access
 
 uv pip install --python ~/r3-toolchain/.venv/bin/python \
   -e ~/r3-toolchain/r3 -e ~/r3-toolchain/foreman
