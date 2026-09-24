@@ -57,11 +57,24 @@ git clone git@github.com:matthias-k/r3-tooling.git && cd r3-tooling && ./install
 `./install.sh` prompts for the locations (press Enter to accept each default); add `--yes` to take all
 defaults non-interactively, or `--dry-run` to preview. It creates a `uv` venv with r3 + foreman, PATH
 wrappers (`r3`, `xr3`, `xr3-slurm`, `foreman`), an `xr3.yaml`, and an initialized `R3_REPOSITORY`, and
-writes a `~/r3-toolchain/update.sh` you can re-run any time to update. Flags, manual steps, SLURM, and the
+writes a `<toolchain-root>/update.sh` you can re-run any time to update. Flags, manual steps, SLURM, and the
 foreman tunnel are in **[`SETUP.md`](SETUP.md)**.
 
-> The one-liner clones rather than `curl | bash`-ing a lone script because `install.sh` needs the checked-out
-> repo (it wires up `extensions/` and `skills/r3`). `r3` is public; `foreman` and this repo are private for
+**One canonical clone.** The toolchain works from a single clone at `<toolchain-root>/r3-tooling` (default
+`~/r3-toolchain/r3-tooling`, alongside the `r3`/`foreman` clones it manages). If you run `install.sh` from
+some other clone, it creates/uses that canonical one and re-runs from it — so the wrappers, the skill
+symlink, and `update.sh` all point at one place (no "which clone?" confusion). The initial clone you made
+to get `install.sh` is then disposable. Pass `--no-relocate` to run a clone in place instead.
+
+Once this repo is public, the first install becomes a true one-liner via **`bootstrap.sh`** (it asks for the
+toolchain dir, clones into `<toolchain-root>/r3-tooling`, and runs the installer):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mtangemann/r3-tooling/main/bootstrap.sh | bash
+```
+
+> The install can't be a `curl | bash` of a lone `install.sh` because it needs the checked-out repo (it wires
+> up `extensions/` and `skills/r3`) — hence a clone. `r3` is public; `foreman` and this repo are private for
 > now, so cloning needs SSH access to GitHub (use `--clone-proto https` for the public parts only).
 
 What's next (the `xr3` skill, folding in `RESEARCH_WORKFLOW.md`, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.

@@ -22,6 +22,14 @@ git clone git@github.com:matthias-k/r3-tooling.git r3-tooling && cd r3-tooling
 ./install.sh --dry-run
 ```
 
+**One canonical clone.** The toolchain lives in a single clone at `<toolchain-root>/r3-tooling`
+(default `~/r3-toolchain/r3-tooling`, next to the `r3`/`foreman` clones it manages). If you run
+`install.sh` from a *different* clone (like the one you just made above), it creates/uses the
+canonical clone and re-runs from there, so the wrappers, the skill symlink, and `update.sh` all
+point at one place — the clone you started from is then disposable. Use `--no-relocate` to run a
+clone in place. Once this repo is public, `bootstrap.sh` makes the first install a one-liner:
+`curl -fsSL <raw-url>/bootstrap.sh | bash` (it asks for the toolchain dir and clones there for you).
+
 `./install.sh --help` lists every flag. The installer is **idempotent**: every interactive
 prompt has a matching flag, so a saved, fully-flagged command (or `--yes`) doesn't just do a
 first install — re-running it later **is** the update command (fast-forward-`git pull`s each
