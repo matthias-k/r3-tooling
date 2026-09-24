@@ -2,7 +2,7 @@
 # bootstrap.sh — clone r3-tooling into a single canonical location and run its installer.
 #
 # Only needs git. Intended to be curl'd (once the repo is public):
-#   curl -fsSL <raw-url>/bootstrap.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash
 # or downloaded and run. It asks for the toolchain directory, clones
 # r3-tooling into <toolchain-root>/r3-tooling, and hands off to that clone's
 # install.sh (passing --toolchain-root through). Any extra flags are forwarded to
