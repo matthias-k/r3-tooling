@@ -28,6 +28,7 @@ ASSUME_YES=0
 DRY_RUN=0
 NO_UPDATE=0
 NO_RELOCATE="${R3_NO_RELOCATE:-0}"   # 1 = run this clone in place, don't relocate
+BUILD_FRONTEND=1            # set to 0 by preflight if npm is unavailable (foreman UI stays unstyled)
 
 # track which promptable settings were given explicitly, so we don't re-ask them
 CLONE_PROTO_SET=0; TOOLCHAIN_ROOT_SET=0; BIN_DIR_SET=0
@@ -217,6 +218,25 @@ phase_preflight() {
     fi
   fi
   [ "$DRY_RUN" -eq 1 ] || info "uv: $(command -v uv 2>/dev/null || echo 'will be installed')"
+
+  # node/npm build foreman's web UI stylesheet (Tailwind -> static/output.css, which is
+  # gitignored, so a fresh clone has none). Without it foreman runs but renders unstyled.
+  # We don't auto-install node (unlike uv): it's a heavier toolchain and often user-managed
+  # (nvm) on HPC. Missing npm -> make the user confirm skipping, defaulting to abort.
+  if command -v npm >/dev/null 2>&1; then
+    info "npm: $(command -v npm) ($(npm -v 2>/dev/null))"
+  else
+    BUILD_FRONTEND=0
+    warn "npm not found — cannot build foreman's web UI stylesheet (static/output.css)."
+    warn "foreman will still run, but its pages render UNSTYLED until the CSS is built."
+    warn "install Node.js/npm (e.g. via nvm: https://github.com/nvm-sh/nvm) and re-run to fix."
+    if [ "$ASSUME_YES" -eq 1 ] || [ ! -t 0 ]; then
+      warn "continuing without the foreman frontend build (--yes/non-interactive); re-run once npm is available."
+    else
+      local ans=""; read -r -p "Continue without building foreman's UI styling? (yes = skip, no = abort to install npm first) [no]: " ans || true
+      case "${ans:-no}" in y|Y|yes|YES) warn "skipping foreman frontend build at your request.";; *) err "aborted — install npm, then re-run install.sh."; exit 1;; esac
+    fi
+  fi
 }
 # clone_or_update DIR URL REF LABEL: clone if absent; else ff-only update (safe).
 clone_or_update() {
@@ -260,6 +280,30 @@ phase_venv() {
     || { err "editable install of r3/foreman failed"; exit 1; }
   run uv pip install --python "$VENV_DIR/bin/python" click pyyaml executor tqdm \
     || { err "install of xr3 deps failed"; exit 1; }
+}
+# phase_foreman_frontend: build foreman's web UI (npm deps + Tailwind CSS). Mirrors
+# foreman's own Makefile `install` target so the two don't drift. output.css is gitignored,
+# so this must run on every fresh install for the UI to be styled.
+phase_foreman_frontend() {
+  local static_dir="$TOOLCHAIN_ROOT/foreman/foreman/static"
+  if [ "$BUILD_FRONTEND" -eq 0 ]; then
+    info "foreman frontend: skipped (npm unavailable); UI stays unstyled until built"
+    return
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '  [dry-run] cd %s && npm install && npx tailwindcss -i input.css -o output.css\n' "$static_dir"
+    return
+  fi
+  if [ ! -d "$static_dir" ]; then
+    warn "foreman frontend: $static_dir not found (foreman clone missing?); skipping"
+    EXIT_CODE=1; return
+  fi
+  info "foreman frontend: npm install + Tailwind build ($static_dir)"
+  run bash -c "cd \"$static_dir\" && npm install" \
+    || { err "foreman frontend: npm install failed in $static_dir"; EXIT_CODE=1; return; }
+  run bash -c "cd \"$static_dir\" && npx tailwindcss -i input.css -o output.css" \
+    || { err "foreman frontend: Tailwind CSS build failed in $static_dir"; EXIT_CODE=1; return; }
+  info "foreman frontend built: $static_dir/output.css"
 }
 # ensure_bashrc_block MARKER LINE...: idempotently maintain a marked block in ~/.bashrc.
 ensure_bashrc_block() {
@@ -409,6 +453,12 @@ phase_verify() {
     # subprocess resolution via PATH (execvp ignores shell functions/aliases):
     PATH="$BIN_DIR:$PATH" python3 -c "import subprocess,sys; sys.exit(subprocess.run(['xr3','--help'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode)" \
       && info "xr3 resolves from a subprocess" || { err "xr3 not resolvable from subprocess"; ok=0; }
+    # foreman UI stylesheet: warn (don't fail) if it wasn't built — foreman still runs.
+    local css="$TOOLCHAIN_ROOT/foreman/foreman/static/output.css"
+    if [ "$BUILD_FRONTEND" -eq 1 ]; then
+      [ -s "$css" ] && info "foreman stylesheet present: $css" \
+        || warn "foreman stylesheet missing ($css); UI will be unstyled. Re-run install, or 'make install' in the foreman clone."
+    fi
     [ "$ok" -eq 1 ] || EXIT_CODE=1
   fi
   print_remote_foreman
@@ -517,6 +567,7 @@ main() {
   phase_preflight
   phase_clones
   phase_venv
+  phase_foreman_frontend
   phase_wrappers
   phase_config
   phase_skill

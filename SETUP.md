@@ -86,6 +86,11 @@ The mental model, in one picture:
   functions).
 - **One config file**, `~/.config/xr3.yaml` by default, with a **base root** over your
   projects directory (plus, unless `--no-slurm`, a `slurm:` section).
+- **foreman's web UI stylesheet** — foreman is a Tailwind app whose CSS
+  (`foreman/static/output.css`) is gitignored, so a fresh clone has none. The installer runs
+  `npm install` + `npx tailwindcss` in `foreman/static` to build it. This needs **node/npm**;
+  if npm is missing the installer asks you to confirm skipping (default: abort so you can
+  install npm first), and foreman then runs but renders **unstyled** until you build it.
 - **Optionally**, the r3 skill (§0) symlinked into `~/.claude/skills` and/or
   `~/.codex/skills`.
 
@@ -126,6 +131,17 @@ uv pip install --python ~/r3-toolchain/.venv/bin/python \
 env, if that's what you used in 3.1). Because r3 and foreman are **editable-installed**,
 `import r3` / `import foreman` resolve straight to the checkouts with no `PYTHONPATH` needed
 — so the wrappers below only pin the interpreter, nothing else.
+
+foreman's web UI is a Tailwind app; its compiled stylesheet is gitignored, so build it now
+(needs node/npm — this mirrors foreman's own `make install`):
+
+```bash
+cd ~/r3-toolchain/foreman/foreman/static
+npm install
+npx tailwindcss -i input.css -o output.css   # -> output.css, the styling foreman serves
+```
+
+Without this step foreman still runs, but every page renders unstyled.
 
 ### 3.3 Invocation — wrapper *scripts* on `PATH` (not shell functions)
 
