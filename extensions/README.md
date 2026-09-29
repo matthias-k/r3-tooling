@@ -14,8 +14,10 @@ pure skill stays upstream-ready.
   `xr3pathmap.py`, `xr3diff.py`.)
 - **[`xr3-slurm/`](xr3-slurm/README.md)** — **MLCloud-specific** SLURM submission & observation:
   `submit`, `status`, `watch` (absorbs `sattachx`/`sattachx_wait`). (`xr3-slurm` + `xr3slurmlib.py`.)
-- **`scripts/run_job_locally`** — run a job's `run.sh` inside an interactive SLURM allocation (uses the
-  scratch dir).
+- **`scripts/run_job_locally`** — run a job's `run.sh` inside an interactive SLURM allocation: `cd`s into
+  the job dir and runs `run.sh`, teeing output to `output/slurm_manual_<timestamp>.log`; if a previous
+  checkout is left at `$SCRATCH/job` it offers to delete it, run in a fresh parallel scratch dir, or
+  cancel. (Assumptions it needs are in [CONTRACT.md](CONTRACT.md).)
 - **[`CONTRACT.md`](CONTRACT.md)** — the assumptions the tools place on jobs.
 - house conventions to fold into `RESEARCH_WORKFLOW.md` are a planned addition, not yet vendored here —
   see [`../docs/ideas/research-workflow-additions.md`](../docs/ideas/research-workflow-additions.md) (`ROADMAP.md`).

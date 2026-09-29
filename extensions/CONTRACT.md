@@ -78,9 +78,16 @@ itself — only by these tools.
 
 ## For `scripts/run_job_locally`
 
-- **The SLURM scratch dir.** It runs a job's `run.sh` against `/scratch_local/<user>-$SLURM_JOB_ID/job`
-  (i.e. inside an interactive SLURM allocation, using `$SCRATCH`). *Breaks:* run it outside a SLURM
+*(What the helper does is in [extensions/README.md](README.md); this is only what a job/environment must
+provide for it to work.)*
+
+- **An interactive SLURM allocation.** Needs `$SLURM_JOB_ID` set and the node-local scratch
+  `/scratch_local/<user>-$SLURM_JOB_ID/` (i.e. `$SCRATCH`) to exist. *Breaks:* run outside a SLURM
   allocation and there's no scratch dir.
+- **The job's `run.sh` checks out into `$SCRATCH/job`.** The helper reuses that exact path — it probes it
+  to offer reuse/replace of a leftover checkout, and its `$SCRATCH`-based model assumes the job lands
+  there. *Breaks:* a `run.sh` that checks out elsewhere still runs, but the leftover-detection and scratch
+  reuse silently don't apply.
 
 ---
 
