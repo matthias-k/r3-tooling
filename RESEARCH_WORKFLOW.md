@@ -183,6 +183,14 @@ have a classical run file**. The archetypes in use:
   node** that downstream jobs depend on. Examples: `datasets/MIT300_raw`,
   `datasets/CAT2000_raw`, `…/local_global_attention_model/src`. This is *the* documented
   way to depend on external data until r3 has a first-class option for it.
+- **Probe / spike jobs** — a job set up **exclusively to be dev-run**, to answer a question that
+  shapes the *real* job's design: a speed/memory test, a "does this loader/model even work",
+  a quick parameter sanity check. You build it with the normal job machinery (env + deps, so the
+  probe runs in the same environment as the eventual job), `dev-checkout` and run `run_inner.sh`,
+  and read the result. Disposition is a judgment call: **commit it if the finding drove a design
+  decision** (it's then the provenance of *why* the real job is built the way it is — keep a
+  short `README.md`/note saying what it showed); **throw it away** (never commit) if it was
+  trivial. This is the middle ground between a `tmp/` scratch script and a kept compute job.
 
 ## Job structure & execution
 
