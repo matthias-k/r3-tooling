@@ -585,6 +585,17 @@ First used in the MathTutorBench zero-shot-baseline (the OpenRouter judge run,
   brainstorms; write future-experiment ideas there. An open-ended "let the agent
   explore the data and report anything interesting" section is welcome (trim
   later).
+- **Dev-render before committing — for reports and cheap/exploratory jobs.** When a job is cheap
+  to run and its *output* is what you're iterating on — reports above all, plus jobs with a
+  less-settled roadmap, or whenever the user wants to eyeball the result first — treat the dev
+  run as the review point: `xr3 dev-checkout .`, run `run_inner.sh` (or render the `.qmd`) in the
+  working dir, look at the actual output (let the user review it if they want), and commit once
+  it's right. The compute→report split makes this near-free for reports: they read the
+  *committed* compute output, so re-rendering never recomputes. **This is not the rule for
+  expensive compute** (training, big sweeps) — there you smoke-test with *reduced* parameters,
+  then commit and do the single real run; you don't full-run twice. So: dev-run-then-commit for
+  cheap/iterative work, smoke-test-then-commit-then-run for expensive work. Pair with the human
+  review below.
 - **Report review loop**: research reports can be improved via a human-gated
   review→revise loop mapped onto the r3 path-version chain (independent
   single-stance reviewer agents → `REVIEW.md` → human picks issues → revise).
