@@ -6,6 +6,12 @@ exploration (e.g. browsing jobs by path). Some conventions are global, some
 situational — the notes say which. Grounded in worked examples (the
 MathTutorBench and Spatial-Saliency prompt-opt experiments).
 
+**The baseline rule: real research work lives in r3 jobs.** Running an experiment,
+evaluating a model, building/processing a dataset, analysing results, producing a report
+— each is an r3 job, so it carries provenance and can be found, re-run, and depended on.
+Ad-hoc scripts and notebooks are for throwaway exploration (`tmp/`, `notebooks/`);
+anything worth keeping or reproducing becomes a job.
+
 > This doc is the canonical home for these conventions. It supersedes the
 > per-agent memory note of the same name (now a pointer here). Edit it here.
 
