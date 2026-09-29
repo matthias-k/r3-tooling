@@ -310,7 +310,9 @@ index instead:
   listed in `r3.yaml`'s `ignore` (e.g. `pysaliency_datasets/` holding downloaded
   archives and expensive intermediates) makes a job cheap to re-run while
   iterating, while a fresh `r3 checkout` still starts empty and rebuilds from
-  scratch. Skip-if-present must verify a hash rather than just existence.
+  scratch. Skip-if-present must verify a hash rather than just existence. Only worth the added
+  complexity once a **single run is minutes, not seconds** — for cheap jobs the plain dev-run is
+  already fast enough, and a stale-cache bug costs more than the caching saves.
 - **Params a downstream job reads → commit them as a file, not only `task_meta`.** An
   `r3 checkout` (and any recursive-copy dependency) **omits the upstream job's
   `metadata.yaml` and `r3.yaml`**, so a downstream job that fans in many upstreams
