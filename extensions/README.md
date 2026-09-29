@@ -19,8 +19,9 @@ pure skill stays upstream-ready.
   checkout is left at `$SCRATCH/job` it offers to delete it, run in a fresh parallel scratch dir, or
   cancel. (Assumptions it needs are in [CONTRACT.md](CONTRACT.md).)
 - **[`CONTRACT.md`](CONTRACT.md)** — the assumptions the tools place on jobs.
-- house conventions to fold into `RESEARCH_WORKFLOW.md` are a planned addition, not yet vendored here —
-  see [`../docs/ideas/research-workflow-additions.md`](../docs/ideas/research-workflow-additions.md) (`ROADMAP.md`).
+- **[`../RESEARCH_WORKFLOW.md`](../RESEARCH_WORKFLOW.md)** (repo root) — the house research workflow: how
+  these tools are actually used day to day. The place for *prescriptions* ("run a dev-checkout smoke test",
+  "submit via `xr3-slurm`"), as opposed to this file's *assumptions*.
 
 The two tools share one config file (`~/.config/xr3.yaml`, or `$XR3_CONFIG`); each reads only its own
 sections. Copy [`xr3/xr3.example.yaml`](xr3/xr3.example.yaml) to start.

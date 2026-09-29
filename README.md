@@ -28,9 +28,9 @@ how it was built and kept current.
   dependencies + query grammar, the CLI + Python API, r3's non-obvious behaviors). **No `xr3`, no house
   conventions, no galvani specifics** — kept **upstream-ready** so it can move into r3 itself whenever (a
   directory move, not a disentangling job). Verified against r3 `main` (validity stamp in `SKILL.md`).
-- **`extensions/`** — the house layer on top: the `xr3` / `xr3-slurm` tool suite, `RESEARCH_WORKFLOW`
-  conventions, and (to come) examples and the galvani `g` helper. These *reference* the pure skill and never
-  leak into it. **These tools add assumptions to your r3 jobs — see
+- **`extensions/`** — the house layer on top: the `xr3` / `xr3-slurm` tool suite and (to come) examples and
+  the galvani `g` helper. These *reference* the pure skill and never leak into it. (The house *workflow*
+  conventions — how the tools are actually used — live in the top-level [`RESEARCH_WORKFLOW.md`](RESEARCH_WORKFLOW.md).) **These tools add assumptions to your r3 jobs — see
   [`extensions/CONTRACT.md`](extensions/CONTRACT.md).**
 
 ## Extensions: the xr3 / xr3-slurm suite
@@ -69,13 +69,15 @@ Re-run any time to update — the installer saves a `<toolchain-root>/update.sh`
 lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?" confusion. Full
 details — flags, manual steps, SLURM, the foreman tunnel — are in **[`SETUP.md`](SETUP.md)**.
 
-What's next (the `xr3` skill, folding in `RESEARCH_WORKFLOW.md`, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
+What's next (the `xr3` skill, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
 
 ## Layout
 
 **Use-facing:**
 - `skills/r3/` — **the pure r3 skill** (install this).
 - `extensions/` — the **`xr3` / `xr3-slurm`** tool suite, `CONTRACT.md`, and house conventions.
+- `RESEARCH_WORKFLOW.md` — **the house research workflow**: how we actually use r3/xr3 (project & path
+  layout, experiment structure, job archetypes, `run.sh`/environment, reports, gotchas).
 
 **Build provenance / maintenance** (not needed to *use* the skill):
 - `docs/specs/` — the design spec · `docs/superpowers/plans/` — the build plan.

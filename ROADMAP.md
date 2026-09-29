@@ -13,6 +13,13 @@ live in the linked docs (this file is the map, not the spec).
   documented (`extensions/CONTRACT.md` + per-tool READMEs + `SETUP.md`), merged to `main`.
   See `docs/specs/2026-08-22-xr3-extraction-design.md` and
   `docs/superpowers/HANDOFF-xr3-extraction.md`.
+- **`RESEARCH_WORKFLOW.md` re-homed into the repo** (2026-09-29) — the house workflow doc now lives at
+  the repo root (was `research/docs/`, which isn't versioned), so it gets git history and ships with the
+  toolchain. The `research-workflow-additions.md` conventions (metadata schema, job archetypes, the
+  checkout-omits-metadata hazard, what `check` enforces) were folded in, plus a portable `run.sh`
+  (scratch/launcher fallbacks) for off-cluster use. *Residual:* slicing its pure-r3 mechanics into
+  `skills/r3/` and its house slices into the `xr3` skill rides with item 1 below. Genericizing the
+  user-specific bits (paths, project list) for the workshop is the next phase.
 
 ## Near-future (in rough order)
 
@@ -20,16 +27,16 @@ live in the linked docs (this file is the map, not the spec).
    on r3/xr3 work, so the house workflow surfaces without agents having to read a doc, and
    `projects/CLAUDE.md` / `RESEARCH_WORKFLOW.md` shrink to thin pointers. Kickoff brief:
    **[`docs/ideas/xr3-skill.md`](docs/ideas/xr3-skill.md)**.
-2. **Integrate `RESEARCH_WORKFLOW.md` into r3-tooling** *(high value — these are real additions
-   the house workflow is still missing, not just a re-home)*. Re-home the research-workflow doc
-   here (its r3-mechanics slices → the pure `skills/r3/`; its house-convention slices → the
-   extensions / the xr3 skill), per design spec §5/§9, **folding in the conventions collected in
-   [`docs/ideas/research-workflow-additions.md`](docs/ideas/research-workflow-additions.md)** (metadata
-   schema, job archetypes, the checkout-omits-metadata hazard, what `check` enforces). Do *after* (or
-   with) the xr3 skill so the consolidation happens once.
+2. **Genericize `RESEARCH_WORKFLOW.md` for sharing** *(workshop-driven)* — the doc is re-homed and
+   content-complete (see Done), but still written as "how *I* work": absolute paths, a concrete project
+   list, personal `~/.config/xr3.yaml` / `R3_REPOSITORY`. Factor the user-specific bits into clearly
+   labeled examples (most environment values already live in `xr3.yaml` + `SETUP.md`, so this is lighter
+   than it looks) so colleagues can adopt it on their laptops. Fallback: a `workshop` branch that strips
+   specifics.
 3. **`examples/`** — turn the `auto_submit.py` / `setup_tasks.py` family (which still call the
    now-obsolete monolith) into documented, adaptable templates colleagues can copy, and
-   repoint them at `xr3` / `xr3-slurm`. Spec §10.
+   repoint them at `xr3` / `xr3-slurm`. Spec §10. Candidate additions (workshop): an example singularity
+   build script and an example **venv-based environment r3 job** (the off-cluster environment provider).
 
 ## Finer-grained / tool-level
 
