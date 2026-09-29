@@ -19,6 +19,24 @@ mechanics it builds on live elsewhere, one home each:
   jobs — single source of truth) plus the per-tool READMEs.
 - **how *we* use all of it** (habits, house structure, the flows) → *this doc*.
 
+**Adapting this to your setup.** This doc describes one person's environment
+(MLCloud/galvani: SLURM + Singularity, lustre home). Two kinds of specificity are
+flagged so you can translate them:
+
+- **Environment values** — `$R3_REPOSITORY`, the pathmap roots, scratch — are set
+  *once per machine* (env vars + `~/.config/xr3.yaml`; the `r3` / `xr3` / `xr3-slurm`
+  commands themselves are on your `$PATH` via `install.sh`), not per experiment. Values
+  shown here are the author's defaults; see `SETUP.md`.
+- **Cluster/scheduler specifics** — anything tagged **_(MLCloud/SLURM)_** assumes the
+  galvani SLURM + Singularity setup. On a laptop or another cluster, translate it:
+  `run.sh` already falls back off-cluster (§4), and the compute environment is a
+  swappable r3 dependency (a laptop container or a venv job). §5 is the most
+  cluster-specific.
+
+Project names in examples (`gold-standard`, `saliency-benchmarking`, `research`, …) are
+the author's — substitute your own. The **methodology** (SPEC→PLAN, the compute/report
+split, archetypes, metadata conventions, the review loop) is environment-independent.
+
 ## Contents
 
 1. **Project & path layout** — directory layout, the eponymous-subdir rule, `metadata` conventions.
@@ -195,12 +213,12 @@ itself are in `extensions/CONTRACT.md`):
 - **`run_inner.sh` (the actual logic)** varies by archetype (see *Job archetypes*): a
   pure-compute job calls `singularity exec` directly; a Quarto-report job defines a
   `run_in_container` wrapper and loops over `*.qmd`; a compute+report job does both.
-- **Singularity conventions — all jobs use:** `--nv` (GPU passthrough); `--home
+- **Singularity conventions** _(MLCloud/Singularity)_ **— all jobs use:** `--nv` (GPU passthrough); `--home
   "$SCRATCH/home"` (a writable, disposable home); `--bind $(pwd) --bind $R3_REPOSITORY`
   (so symlinked dependencies resolve); `--env PYTHONPATH=<checked-out repo dirs>` (the
   dev-checkout'd git deps, *not* a base-env install). Some add `-p` (PID namespace, for
   process cleanup) — but see *Known issues* for a Quarto interaction.
-- **Running a job locally.** The sanctioned way to exercise the full
+- **Running a job locally** _(MLCloud/SLURM)_**.** The sanctioned way to exercise the full
   `run.sh`/singularity path outside normal SLURM submission is
   `extensions/scripts/run_job_locally <job-dir>`, **inside an
   interactive SLURM allocation** (it reuses `$SCRATCH`). It is the only way to test
@@ -208,6 +226,9 @@ itself are in `extensions/CONTRACT.md`):
   *Developing & committing* → in-container dev testing.
 
 ## Environment & containers
+
+**_(MLCloud/SLURM)_** — this whole section assumes the galvani SLURM + Singularity
+setup; a laptop or another cluster differs (see *Adapting this to your setup* at the top).
 
 - **SLURM scratch.** Cluster nodes have node-local NVMe scratch at
   `/scratch_local/<user>-<SLURM_JOB_ID>/`; `$SCRATCH` points there inside a job. It is
@@ -299,21 +320,22 @@ loop:
 5. **`xr3 check .`** → **`xr3 commit .`** (commit runs `check` by default);
 6. **`xr3 dev-cleanup .`** to remove the checked-out deps.
 
-**Submit with `xr3-slurm`, never by hand** (and never with the obsolete monolith
-`xr3-obsolete`): `xr3-slurm submit $(xr3 history --latest --id .)` submits the latest
+**Submit with `xr3-slurm`, never by hand** _(MLCloud/SLURM)_ (and never with the obsolete
+monolith `xr3-obsolete`): `xr3-slurm submit $(xr3 history --latest --id .)` submits the latest
 committed job for this dir; or `xr3-slurm submit --tag <tag>` / `<job-id>`. Per-command
 detail for everything above is in the r3-tooling tool READMEs
 (`extensions/xr3/README.md`, `…/xr3-slurm/README.md`); what the tools
 *require* of a job is in `…/extensions/CONTRACT.md`.
 
-- **Running `xr3` / `r3` / `xr3-slurm`.** These are wrapper scripts in `$LUSTREWORK/bin`
-  (on `PATH`), so they resolve **by name in any context** — interactive *and* non-interactive
-  shells (an agent's Bash tool, cron, `srun bash -c`) and `subprocess`/`execvp` — with no
-  `PYTHONPATH`, conda activation, or explicit path needed. The wrapper pins the `r3_lustre`
-  env, where `r3` is editable-installed. `$R3_REPOSITORY` must be set (login profile:
-  `$LUSTREWORK/r3_repo`). `xr3` is the cluster-agnostic dev workflow; `xr3-slurm` is
-  SLURM submission/observation. Setup + what the tools assume about jobs:
-  `SETUP.md` and `extensions/CONTRACT.md`.
+- **Running `xr3` / `r3` / `xr3-slurm`.** These are wrapper scripts on your `PATH`
+  (installed by `install.sh` — see `SETUP.md`), so they resolve **by name in any context**
+  — interactive *and* non-interactive shells (an agent's Bash tool, cron, `srun bash -c`)
+  and `subprocess`/`execvp` — with no `PYTHONPATH`, env activation, or explicit path
+  needed. The wrapper pins the r3 install's environment, where `r3` is editable-installed.
+  `$R3_REPOSITORY` must be set (once, at install/login — see `SETUP.md`). `xr3` is the
+  cluster-agnostic dev workflow; `xr3-slurm` is SLURM submission/observation
+  _(MLCloud/SLURM)_. Setup + what the tools assume about jobs: `SETUP.md` and
+  `extensions/CONTRACT.md`.
 - **SLURM commands (`squeue`/`scancel`/`sacct` … and `sbatch`).** On a compute/bare node
   these run directly. **Inside a container** (no SLURM binaries — e.g. a VS Code remote
   session in a running job) tunnel them: `ssh galvani "squeue -u $USER …"`, `ssh galvani
