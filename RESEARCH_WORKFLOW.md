@@ -218,12 +218,13 @@ itself are in `extensions/CONTRACT.md`):
   (so symlinked dependencies resolve); `--env PYTHONPATH=<checked-out repo dirs>` (the
   dev-checkout'd git deps, *not* a base-env install). Some add `-p` (PID namespace, for
   process cleanup) — but see *Known issues* for a Quarto interaction.
-- **Running a job locally** _(MLCloud/SLURM)_**.** The sanctioned way to exercise the full
-  `run.sh`/singularity path outside normal SLURM submission is
-  `extensions/scripts/run_job_locally <job-dir>`, **inside an
-  interactive SLURM allocation** (it reuses `$SCRATCH`). It is the only way to test
-  `run.sh`/`run_inner.sh` themselves; for a quicker inner loop that skips them, see
-  *Developing & committing* → in-container dev testing.
+- **Running a job locally.** The sanctioned way to exercise the full `run.sh` path outside
+  normal SLURM submission — and capture its log — is
+  `extensions/scripts/run_job_locally <job-dir>`. It runs `run.sh` and tees stdout+stderr to
+  `output/run_manual_<ts>.log`, setting `$SCRATCH` for you (node-local SLURM scratch in an
+  allocation, else a `mktemp -d`), so it works **on the cluster and off** (laptop /
+  interactive job). It is the only way to test `run.sh`/`run_inner.sh` themselves; for a
+  quicker inner loop that skips them, see *Developing & committing* → in-container dev testing.
 
 ## Environment & containers
 
@@ -513,7 +514,7 @@ harness-managed background jobs — launch it **detached** and make it
 **resume-safe** so a death costs nothing.
 
 - **Detach from the session** with `setsid nohup`, log into the job's `output/`
-  (timestamped, matching `run_job_locally`'s `output/slurm_manual_<ts>.log`),
+  (timestamped, matching `run_job_locally`'s `output/run_manual_<ts>.log`),
   stdin from `/dev/null`:
   ```bash
   mkdir -p output

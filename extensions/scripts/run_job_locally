@@ -4,8 +4,12 @@ set -xe
 # pipefail so a failing `run.sh` isn't masked by `tee`'s exit status (see the run line below).
 set -o pipefail
 
-SCRATCH_JOB_DIR="/scratch_local/$(whoami)-${SLURM_JOB_ID}/job"
-SCRATCH_PARENT_DIR="$(dirname "$SCRATCH_JOB_DIR")"
+# Scratch dir the job checks out into: node-local SLURM scratch when we're in an
+# allocation ($SCRATCH is set), otherwise a throwaway temp dir. Exported so the job's
+# run.sh (same ${SCRATCH:-mktemp} fallback) checks out into the very same dir.
+export SCRATCH="${SCRATCH:-$(mktemp -d)}"
+SCRATCH_JOB_DIR="$SCRATCH/job"
+SCRATCH_PARENT_DIR="$SCRATCH"
 
 if [ -d "$SCRATCH_JOB_DIR" ]; then
     echo "Directory $SCRATCH_JOB_DIR exists."
@@ -33,7 +37,7 @@ if [ -d "$SCRATCH_JOB_DIR" ]; then
 fi
 
 JOB_DIRECTORY=$1
-LOGFILE="output/slurm_manual_$(date +%Y%m%d_%H%M%S).log"
+LOGFILE="output/run_manual_$(date +%Y%m%d_%H%M%S).log"
 
 echo "Logging to $LOGFILE"
 

@@ -81,13 +81,14 @@ itself — only by these tools.
 *(What the helper does is in [extensions/README.md](README.md); this is only what a job/environment must
 provide for it to work.)*
 
-- **An interactive SLURM allocation.** Needs `$SLURM_JOB_ID` set and the node-local scratch
-  `/scratch_local/<user>-$SLURM_JOB_ID/` (i.e. `$SCRATCH`) to exist. *Breaks:* run outside a SLURM
-  allocation and there's no scratch dir.
-- **The job's `run.sh` checks out into `$SCRATCH/job`.** The helper reuses that exact path — it probes it
-  to offer reuse/replace of a leftover checkout, and its `$SCRATCH`-based model assumes the job lands
-  there. *Breaks:* a `run.sh` that checks out elsewhere still runs, but the leftover-detection and scratch
-  reuse silently don't apply.
+- **The job's `run.sh` checks out into `${SCRATCH:-…}/job`.** The helper sets and **exports** `$SCRATCH`
+  (the node-local SLURM scratch `/scratch_local/<user>-$SLURM_JOB_ID/` when you're in an allocation, else a
+  fresh `mktemp -d`), then runs `run.sh`. The two agree only if `run.sh` reads `$SCRATCH` the same way — the
+  house `run.sh` template does (`${SCRATCH:-$(mktemp -d)}/job`). *Breaks:* a `run.sh` that checks out
+  elsewhere still runs, but the leftover-detection and scratch reuse silently don't apply.
+
+  No SLURM allocation is required — outside SLURM the helper just makes a temp dir. It runs `run.sh` and
+  tees stdout+stderr to `output/run_manual_<ts>.log`, so a manual run is logged like a submitted one.
 
 ---
 
