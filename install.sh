@@ -24,6 +24,8 @@ SLURM_SUBMIT_HOST=""
 NO_SLURM=0
 INSTALL_SKILL="prompt"      # prompt | yes | no (resolved to yes/no in interactive_config)
 SKILL_TARGET="all"          # all | claude | codex
+IMPORT_CONTEXT="prompt"     # prompt | yes | no — add the workflow @import to a CLAUDE.md
+CONTEXT_CLAUDE_MD="$HOME/.claude/CLAUDE.md"   # target for the @import (--import-context)
 ASSUME_YES=0
 INTERACTIVE=0               # resolved in main(): 1 = prompt on a tty, 0 = --yes/non-interactive
 DRY_RUN=0
@@ -67,6 +69,9 @@ SLURM:
 
 Skill:
   --install-skill / --no-install-skill   --skill-target all|claude|codex
+
+Agent context (point agents at RESEARCH_WORKFLOW.md via a CLAUDE.md @import):
+  --import-context / --no-import-context   --context-claude-md PATH  (default ~/.claude/CLAUDE.md)
 
 Modes:
   --yes         accept defaults, no prompts
@@ -128,6 +133,9 @@ parse_args() {
       --install-skill) INSTALL_SKILL="yes"; shift;;
       --no-install-skill) INSTALL_SKILL="no"; shift;;
       --skill-target) reqval "$@"; SKILL_TARGET="$2"; shift 2;;
+      --import-context) IMPORT_CONTEXT="yes"; shift;;
+      --no-import-context) IMPORT_CONTEXT="no"; shift;;
+      --context-claude-md) reqval "$@"; CONTEXT_CLAUDE_MD="$2"; shift 2;;
       --yes|-y) ASSUME_YES=1; shift;;
       --dry-run) DRY_RUN=1; shift;;
       --no-update) NO_UPDATE=1; shift;;
@@ -169,6 +177,18 @@ interactive_config() {
       case "${a:-yes}" in y|Y|yes|YES) INSTALL_SKILL=yes;; *) INSTALL_SKILL=no;; esac
     else
       INSTALL_SKILL=yes
+    fi
+  fi
+  # Context-import decision (resolve "prompt" -> yes/no now, before any relocate).
+  # Non-interactive default is "no": phase_agent_context still prints the import line,
+  # but doesn't edit a CLAUDE.md unless the user explicitly asked (--import-context).
+  if [ "$IMPORT_CONTEXT" = "prompt" ]; then
+    if [ "$INTERACTIVE" -eq 1 ]; then
+      local c=""; read -r -p "  add the research-workflow context import to a CLAUDE.md? (yes/no) [yes]: " c < /dev/tty || true
+      case "${c:-yes}" in y|Y|yes|YES) IMPORT_CONTEXT=yes;; *) IMPORT_CONTEXT=no;; esac
+      [ "$IMPORT_CONTEXT" = "yes" ] && prompt CONTEXT_CLAUDE_MD "    target CLAUDE.md" "$CONTEXT_CLAUDE_MD"
+    else
+      IMPORT_CONTEXT=no
     fi
   fi
 }
@@ -429,6 +449,29 @@ phase_skill() {
     all|*)  link_skill "$HOME/.claude/skills"; link_skill "$HOME/.codex/skills";;
   esac
 }
+# phase_agent_context: point agents at the workflow. Always prints the @import line;
+# adds it to a CLAUDE.md only when opted in (interactive yes, or --import-context).
+phase_agent_context() {
+  local ctx="$REPO_DIR/agent-context.md" line
+  line="@$ctx"
+  printf '\n'
+  info "Agent discovery — add this line to a CLAUDE.md so sessions auto-follow the workflow:"
+  printf '  %s\n' "$line"
+  info "(in ~/.claude/CLAUDE.md it loads with no approval prompt; a project CLAUDE.md prompts once — check with /context)"
+  [ "$IMPORT_CONTEXT" = "yes" ] || return 0   # print-only; explicit 0 so set -e doesn't abort main
+
+  local target="${CONTEXT_CLAUDE_MD/#\~/$HOME}"
+  if [ "$DRY_RUN" -eq 1 ]; then info "(dry-run) would add the import to $target"; return; fi
+  if [ -f "$target" ] && grep -qF "agent-context.md" "$target" 2>/dev/null; then
+    info "context import already present in $target; leaving it"; return
+  fi
+  mkdir -p "$(dirname "$target")" 2>/dev/null || { warn "cannot create dir for $target"; return; }
+  if printf '\n# r3 research workflow — maintained in r3-tooling\n%s\n' "$line" >> "$target"; then
+    info "added the context import to $target"
+  else
+    warn "could not write $target"
+  fi
+}
 print_remote_foreman() {
   local host="${SLURM_SUBMIT_HOST:-${SLURM_HEADNODES[0]:-<cluster-host>}}"
   cat <<EOF
@@ -489,6 +532,10 @@ _update_flags() {
   case "$INSTALL_SKILL" in
     yes) f+="$(printf ' --install-skill --skill-target %q' "$SKILL_TARGET")";;
     no)  f+=" --no-install-skill";;
+  esac
+  case "$IMPORT_CONTEXT" in
+    yes) f+="$(printf ' --import-context --context-claude-md %q' "$CONTEXT_CLAUDE_MD")";;
+    no)  f+=" --no-import-context";;
   esac
   printf '%s' "$f"
 }
@@ -589,6 +636,7 @@ main() {
   phase_config
   phase_skill
   phase_verify
+  phase_agent_context
   print_update_command
   [ "$EXIT_CODE" -eq 0 ] && info "done." || warn "finished with errors (see above)."
   exit "$EXIT_CODE"
