@@ -1,26 +1,67 @@
 # r3-tooling
 
-An agent-facing **r3 skill** — a Claude Code skill that lets an agent operate
-[r3](https://github.com/mtangemann/r3) reliably (author jobs, wire dependencies, commit/checkout, query
-the job graph, trace provenance). Plus a home for house **extensions** — the `xr3` / `xr3-slurm` tool suite
-and `RESEARCH_WORKFLOW` conventions. Bootstrapped 2026-08-16 from the r3-tutorial work.
+**r3-tooling** is the house toolchain around [r3](https://github.com/mtangemann/r3): an
+agent-facing **r3 skill**, the **`xr3` / `xr3-slurm`** command-line tools, the house
+**`RESEARCH_WORKFLOW.md`** conventions, and a one-command **installer** that wires it all up
+(r3 + xr3/xr3-slurm + foreman). Use the whole toolchain — or just the skill.
 
-## Using the r3 skill
+## Install
 
-The skill is **`skills/r3/`** — self-contained (a `SKILL.md`, three `reference/` files, and a bundled
-`scripts/r3dev.py`). Install it wherever your Claude Code discovers skills — e.g. symlink it so `git pull`
-keeps it current:
+One command sets up r3 + xr3/xr3-slurm + foreman:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash
+```
+
+It prompts for the toolchain directory and the other settings — locations, SLURM head node,
+whether to install the agent skill, and whether to wire the workflow into your `CLAUDE.md` —
+then installs: a `uv` venv with r3 + foreman, the `r3` / `xr3` / `xr3-slurm` / `foreman`
+commands on your `PATH`, an `xr3.yaml`, and an initialized `R3_REPOSITORY`. It prompts **even
+when piped** (`curl … | bash`), reading from your terminal; pass `--yes` to run unattended
+with all defaults, or `--dry-run` to preview. With no terminal and no `--yes` it errors
+rather than silently taking defaults.
+
+> Prefer to clone first (to read the script or hack on it)? Same result:
+> ```bash
+> git clone https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
+> ```
+> `r3` and `r3-tooling` are public; `foreman` is still private, so its clone needs GitHub
+> access — the installer's default `--clone-proto ssh` handles that.
+
+Re-run any time to update — the installer saves a `<toolchain-root>/update.sh`. Everything
+lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?"
+confusion. Full details — flags, manual steps, SLURM, the foreman tunnel — are in
+**[`SETUP.md`](SETUP.md)**.
+
+## What's in here
+
+- **[`skills/r3/`](skills/r3/)** — the **r3 skill**: lets an agent operate r3 reliably
+  (author jobs, wire dependencies, commit/checkout, query the job graph, trace provenance).
+  Self-contained and usable on its own (see *Using the r3 skill on its own*).
+- **[`extensions/`](extensions/README.md)** — the **`xr3` / `xr3-slurm`** command-line suite
+  (the house dev + SLURM workflow), plus **[`CONTRACT.md`](extensions/CONTRACT.md)** — the
+  assumptions these tools place on your jobs.
+- **[`RESEARCH_WORKFLOW.md`](RESEARCH_WORKFLOW.md)** — the house research workflow: how we
+  actually use r3/xr3 (project & path layout, `SPEC.md`→`PLAN.md`→implement, job archetypes,
+  `run.sh`/environment, reports, gotchas).
+- **[`agent-context.md`](agent-context.md)** — a short pointer you `@`-import into a
+  `CLAUDE.md` so agents auto-discover the workflow (the installer can wire this for you).
+- **`bootstrap.sh` / `install.sh`** — the one-command installer (above).
+
+## Using the r3 skill on its own
+
+The skill (**`skills/r3/`**) is self-contained — a `SKILL.md`, `reference/` files, and a
+bundled `scripts/r3dev.py` — and works without the rest of the toolchain. The installer can
+symlink it, or do it by hand so `git pull` keeps it current:
 
 ```bash
 ln -s "$(pwd)/skills/r3" ~/.claude/skills/r3                  # for all your projects
 # or:  ln -s "$(pwd)/skills/r3" <project>/.claude/skills/r3   # for one project
 ```
 
-(Copy the directory instead if you prefer a pinned snapshot; use whatever skill-install method your team
-already uses.) Claude Code then activates it on r3 work — writing an `r3.yaml`, wiring
-`find_latest`/`find_all` or git dependencies, committing/checking out jobs, the Python API, tracing lineage
-— or you can invoke it explicitly. **Nothing else in this repo is needed to use the skill**; the rest is
-how it was built and kept current.
+(Copy the directory instead for a pinned snapshot.) Claude Code activates it on r3 work —
+writing an `r3.yaml`, wiring `find_latest`/`find_all` or git dependencies, committing/checking
+out jobs, the Python API, tracing lineage — or you can invoke it explicitly.
 
 ## The one organizing principle: pure r3 vs extensions
 
@@ -46,42 +87,12 @@ Vendored in [`extensions/`](extensions/README.md):
 conventions, SLURM config, …). Those, and what breaks without them, are the single source of truth in
 **[`extensions/CONTRACT.md`](extensions/CONTRACT.md)** — read it before pointing the tools at your jobs.
 
-### Install the full toolchain
-
-One command sets up r3 + xr3/xr3-slurm + foreman:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash
-```
-
-`bootstrap.sh` prompts for the toolchain directory and the other settings, then installs everything
-under it: a `uv` venv with r3 + foreman, the `r3` / `xr3` / `xr3-slurm` / `foreman` commands on your
-`PATH`, an `xr3.yaml`, and an initialized `R3_REPOSITORY`. It prompts **even when piped** (`curl … |
-bash`), reading from your terminal; pass `--yes` to run unattended with all defaults, or `--dry-run` to
-preview. With no terminal and no `--yes` it errors rather than silently taking defaults.
-
-> Prefer to clone first (to read the script or hack on it)? Same result:
-> ```bash
-> git clone https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
-> ```
-> `r3` and `r3-tooling` are public; `foreman` is still private, so its clone needs GitHub access — the
-> installer's default `--clone-proto ssh` handles that.
-
-Re-run any time to update — the installer saves a `<toolchain-root>/update.sh` for exactly that. Everything
-lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?" confusion. Full
-details — flags, manual steps, SLURM, the foreman tunnel — are in **[`SETUP.md`](SETUP.md)**.
-
 What's next (the `xr3` skill, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
 
-## Layout
+## Also in here (build provenance / maintenance)
 
-**Use-facing:**
-- `skills/r3/` — **the pure r3 skill** (install this).
-- `extensions/` — the **`xr3` / `xr3-slurm`** tool suite, `CONTRACT.md`, and house conventions.
-- `RESEARCH_WORKFLOW.md` — **the house research workflow**: how we actually use r3/xr3 (project & path
-  layout, experiment structure, job archetypes, `run.sh`/environment, reports, gotchas).
+Not needed to *use* the toolchain:
 
-**Build provenance / maintenance** (not needed to *use* the skill):
 - `docs/specs/` — the design spec · `docs/superpowers/plans/` — the build plan.
 - `docs/r3-upstream-doc-issues.md` — doc/code fixes to make in the r3 repo upstream.
 - `docs/ideas/` — rough thoughts / planned additions not yet folded in (the `xr3` skill; the
@@ -98,3 +109,5 @@ What's next (the `xr3` skill, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
   to come: `examples/`, the galvani `g` helper.
 - Remote-storage is held out of the skill for now (alpha post-merge); ⚠ path-promotion is idea-stage
   upstream and will eventually change `find` (the skill flags it).
+
+*Bootstrapped 2026-08-16 from the r3-tutorial work.*
