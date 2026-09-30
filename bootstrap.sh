@@ -32,11 +32,15 @@ command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 1; }
 # Ask for the toolchain directory unless it was given or we're non-interactive.
 if [ -z "$TOOLCHAIN_ROOT" ]; then
   default="$HOME/r3-toolchain"
-  if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
-    read -r -p "Toolchain directory (holds the toolchain clones + venv) [$default]: " ans || true
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    TOOLCHAIN_ROOT="$default"
+  elif { : < /dev/tty; } 2>/dev/null; then
+    # Read from the terminal, so this prompts even under `curl … | bash`.
+    read -r -p "Toolchain directory (holds the toolchain clones + venv) [$default]: " ans < /dev/tty || true
     TOOLCHAIN_ROOT="${ans:-$default}"
   else
-    TOOLCHAIN_ROOT="$default"
+    echo "ERROR: no terminal available for prompts. Re-run in a terminal, or pass --yes to accept defaults." >&2
+    exit 2
   fi
 fi
 TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT/#\~/$HOME}"   # expand a leading ~

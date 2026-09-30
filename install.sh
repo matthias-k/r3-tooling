@@ -25,6 +25,7 @@ NO_SLURM=0
 INSTALL_SKILL="prompt"      # prompt | yes | no (resolved to yes/no in interactive_config)
 SKILL_TARGET="all"          # all | claude | codex
 ASSUME_YES=0
+INTERACTIVE=0               # resolved in main(): 1 = prompt on a tty, 0 = --yes/non-interactive
 DRY_RUN=0
 NO_UPDATE=0
 NO_RELOCATE="${R3_NO_RELOCATE:-0}"   # 1 = run this clone in place, don't relocate
@@ -42,9 +43,10 @@ usage() {
 
 Usage: ./install.sh [flags]
 
-Run with no flags on a terminal to be prompted for the settings below (press
-Enter to accept each default). --yes (or any non-interactive stdin) skips all
-prompts and uses defaults/flags.
+Prompts for the settings below on a terminal (press Enter to accept each
+[default]) — including when piped, e.g. `curl … | bash`, since prompts read from
+/dev/tty. --yes runs unattended (defaults/flags, no prompts). With no terminal and
+no --yes the installer errors rather than silently taking defaults.
 
 Layout:
   --toolchain-root DIR   (default ~/r3-toolchain) clones + venv live here
@@ -84,16 +86,21 @@ info() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARN\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31mERROR\033[0m %s\n' "$*" >&2; }
 
+# have_tty: true if a controlling terminal is available to prompt on — works even
+# when stdin is a pipe (e.g. `curl … | bash`).
+have_tty() { { : < /dev/tty; } 2>/dev/null; }
+
 # run CMD...: execute, or just print under --dry-run.
 run() {
   if [ "$DRY_RUN" -eq 1 ]; then printf '  [dry-run] %s\n' "$*"; else "$@"; fi
 }
 
-# prompt VAR "question" "default": set VAR from stdin unless --yes/non-interactive.
+# prompt VAR "question" "default": ask on the terminal, or use the default when
+# non-interactive (--yes). INTERACTIVE is resolved once in main().
 prompt() {
   local __var="$1" __q="$2" __def="$3" __ans
-  if [ "$ASSUME_YES" -eq 1 ] || [ ! -t 0 ]; then printf -v "$__var" '%s' "$__def"; return; fi
-  read -r -p "$__q [$__def]: " __ans || true
+  if [ "$INTERACTIVE" -eq 0 ]; then printf -v "$__var" '%s' "$__def"; return; fi
+  read -r -p "$__q [$__def]: " __ans < /dev/tty || true
   printf -v "$__var" '%s' "${__ans:-$__def}"
 }
 
@@ -140,7 +147,7 @@ _default_bindir() {
 # A no-op under --yes or a non-interactive stdin (prompt returns the default),
 # so a fully-flagged or --yes run stays non-interactive.
 interactive_config() {
-  if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
+  if [ "$INTERACTIVE" -eq 1 ]; then
     info "Configure the install (press Enter to accept each [default]):"
   fi
   # A setting given explicitly on the command line is not re-asked.
@@ -151,14 +158,14 @@ interactive_config() {
   [ "$R3_REPO_SET" -eq 1 ]        || prompt R3_REPO        "  R3_REPOSITORY (job repository) location" "$R3_REPO"
   [ "$CONFIG_PATH_SET" -eq 1 ]    || prompt CONFIG_PATH    "  xr3 config file path" "$CONFIG_PATH"
   # SLURM: ask only when not already decided by flags, and only interactively.
-  if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ] && [ "$NO_SLURM" -eq 0 ] && [ "${#SLURM_HEADNODES[@]}" -eq 0 ]; then
-    local hn=""; read -r -p "  SLURM head node for xr3-slurm (blank = no SLURM): " hn || true
+  if [ "$INTERACTIVE" -eq 1 ] && [ "$NO_SLURM" -eq 0 ] && [ "${#SLURM_HEADNODES[@]}" -eq 0 ]; then
+    local hn=""; read -r -p "  SLURM head node for xr3-slurm (blank = no SLURM): " hn < /dev/tty || true
     if [ -n "$hn" ]; then SLURM_HEADNODES=("$hn"); else NO_SLURM=1; fi
   fi
   # Skill decision (resolve "prompt" -> yes/no now, so it happens before any relocate).
   if [ "$INSTALL_SKILL" = "prompt" ]; then
-    if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
-      local a=""; read -r -p "  install the r3 agent skill for claude/codex? (yes/no) [yes]: " a || true
+    if [ "$INTERACTIVE" -eq 1 ]; then
+      local a=""; read -r -p "  install the r3 agent skill for claude/codex? (yes/no) [yes]: " a < /dev/tty || true
       case "${a:-yes}" in y|Y|yes|YES) INSTALL_SKILL=yes;; *) INSTALL_SKILL=no;; esac
     else
       INSTALL_SKILL=yes
@@ -230,10 +237,10 @@ phase_preflight() {
     warn "npm not found — cannot build foreman's web UI stylesheet (static/output.css)."
     warn "foreman will still run, but its pages render UNSTYLED until the CSS is built."
     warn "install Node.js/npm (e.g. via nvm: https://github.com/nvm-sh/nvm) and re-run to fix."
-    if [ "$ASSUME_YES" -eq 1 ] || [ ! -t 0 ]; then
-      warn "continuing without the foreman frontend build (--yes/non-interactive); re-run once npm is available."
+    if [ "$INTERACTIVE" -eq 0 ]; then
+      warn "continuing without the foreman frontend build (--yes); re-run once npm is available."
     else
-      local ans=""; read -r -p "Continue without building foreman's UI styling? (yes = skip, no = abort to install npm first) [no]: " ans || true
+      local ans=""; read -r -p "Continue without building foreman's UI styling? (yes = skip, no = abort to install npm first) [no]: " ans < /dev/tty || true
       case "${ans:-no}" in y|Y|yes|YES) warn "skipping foreman frontend build at your request.";; *) err "aborted — install npm, then re-run install.sh."; exit 1;; esac
     fi
   fi
@@ -552,6 +559,16 @@ relocate_if_needed() {
 
 main() {
   parse_args "$@"
+  # Resolve interactivity once: prompt on the terminal, or use defaults under --yes.
+  # No terminal and no --yes is an error — accepting all defaults must be deliberate.
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    INTERACTIVE=0
+  elif have_tty; then
+    INTERACTIVE=1
+  else
+    err "no terminal available for prompts; re-run in a terminal, or pass --yes to accept defaults/flags."
+    exit 2
+  fi
   interactive_config
   resolve_defaults
   info "r3 toolchain installer (dry-run=$DRY_RUN)"
@@ -559,8 +576,8 @@ main() {
   local slurm_desc="none"
   [ "$NO_SLURM" -eq 1 ] || slurm_desc="${SLURM_HEADNODES[*]:-<empty>}"
   info "projects=$PROJECTS_DIR r3-repo=$R3_REPO clone-proto=$CLONE_PROTO slurm=$slurm_desc"
-  if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ] && [ "$DRY_RUN" -eq 0 ]; then
-    local go=""; read -r -p "Proceed with these settings? [yes]: " go || true
+  if [ "$INTERACTIVE" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
+    local go=""; read -r -p "Proceed with these settings? [yes]: " go < /dev/tty || true
     case "${go:-yes}" in y|Y|yes|YES) ;; *) info "aborted."; exit 0;; esac
   fi
   relocate_if_needed

@@ -54,9 +54,11 @@ One command sets up r3 + xr3/xr3-slurm + foreman:
 curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash
 ```
 
-`bootstrap.sh` asks for a toolchain directory and installs everything under it: a `uv` venv with r3 +
-foreman, the `r3` / `xr3` / `xr3-slurm` / `foreman` commands on your `PATH`, an `xr3.yaml`, and an
-initialized `R3_REPOSITORY`. Add `--yes` for all defaults, or `--dry-run` to preview.
+`bootstrap.sh` prompts for the toolchain directory and the other settings, then installs everything
+under it: a `uv` venv with r3 + foreman, the `r3` / `xr3` / `xr3-slurm` / `foreman` commands on your
+`PATH`, an `xr3.yaml`, and an initialized `R3_REPOSITORY`. It prompts **even when piped** (`curl … |
+bash`), reading from your terminal; pass `--yes` to run unattended with all defaults, or `--dry-run` to
+preview. With no terminal and no `--yes` it errors rather than silently taking defaults.
 
 > Prefer to clone first (to read the script or hack on it)? Same result:
 > ```bash
