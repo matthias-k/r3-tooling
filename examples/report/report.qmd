@@ -10,12 +10,14 @@ lightbox: true
 ---
 
 ::: {.callout-note}
-**tl;dr:** TODO — one or two sentences, glanceable. State the single main outcome
-*qualitatively*, not as a number: a reader should grasp it at a glance and decide
-whether to read on. E.g. "model B substantially outperforms model A", "model B only
-moderately outperforms A", or "the difference is within the margin of error" — not
-"model B scores 0.73 vs 0.68". Precise numbers live in the body; a number here just
-makes the headline harder to digest. Not a paragraph, not a section-by-section summary.
+**tl;dr:** TODO — one or two sentences, glanceable. Lead with the single main
+outcome stated *qualitatively* (e.g. "model B substantially outperforms model A",
+"only moderately", or "within the margin of error") so a reader grasps it at a
+glance and decides whether to read on. A number may *support* it as a detail
+("…, 0.73 vs 0.68") but shouldn't be the story. Prefer no number at all: it keeps
+the headline easy to digest, and it means you don't need an up-front cell computing
+values just to write the tl;dr — process the data on demand where each analysis
+needs it. Not a paragraph, not a section-by-section summary.
 :::
 
 # Introduction

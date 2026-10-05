@@ -570,13 +570,16 @@ First used in the MathTutorBench zero-shot-baseline (the OpenRouter judge run,
 - **tl;dr = the headline result, not a summary of everything.** The `tl;dr`
   callout states the single most important result(s) — what you'd say if the
   reader read nothing else — not a section-by-section overview. One or two
-  sentences; keep it *qualitative*, not a number — a bare figure makes the
-  headline harder to digest, and the precise value lives in the body. E.g. "some
-  current models zero-shot outperform the paper's *finetuned* reward model" or
-  "model B only moderately outperforms A (within the margin of error)", not
-  "model B scores 0.73 vs 0.68" and not "we evaluated N models on M prompts and
-  analysed position bias, prompt sensitivity, …". Supporting caveats and exact
-  numbers belong in the body, not the tl;dr.
+  sentences; lead *qualitatively*. E.g. "some current models zero-shot outperform
+  the paper's *finetuned* reward model" or "model B only moderately outperforms A
+  (within the margin of error)", not "we evaluated N models on M prompts and
+  analysed position bias, prompt sensitivity, …". A number may *support* the
+  headline as a detail ("…, 0.73 vs 0.68") but shouldn't be the story — a bare
+  figure is harder to digest. **Prefer no number at all**: besides readability, it
+  avoids forcing an up-front cell that computes values just so the tl;dr can quote
+  them — keep to the "compute each value near where it's used" rule and process the
+  data on demand per analysis. Supporting caveats and exact numbers belong in the
+  body, not the tl;dr.
 - **Charts: clean and honest.** Error bars where there's a CI; don't truncate a
   bar axis to exaggerate (start at 0 or a meaningful floor like chance); direct-
   label thresholds; highlight the one mark that carries the point; no legend for
