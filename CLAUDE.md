@@ -22,3 +22,20 @@ Two rules for any work in `skills/r3/`:
 2. **Verify against r3 `main`, not memory.** Confirm every r3 claim against `../r3`
    (target `main`; keep `remote.py`/remote-storage out) and live `r3` behavior. Treat
    `raw-material/R3-GOTCHAS.md` (pinned to `c968f42`/0.5.0) as leads to re-verify, not truth.
+
+## Editing the conventions (`RESEARCH_WORKFLOW.md` and the skills)
+
+These docs are read by *many* future sessions, so a convention you add or sharpen
+must generalize past the task you happen to be doing. When you touch them:
+
+1. **Write the general guiding principle, not just the instance in front of you.**
+   Ask what broader rule your specific case is an instance of, and lead with that.
+   Place it by its weight — a foundational invariant belongs near the top, not
+   buried in one section's bullet list.
+2. **Avoid inherited furniture.** A rule written mid-task tends to carry that task's
+   specifics (its artifacts, names, roles — e.g. a "leaderboard" or an "orchestrator"
+   from an auto-research loop). Keep concrete cases as *illustrations* ("e.g.", "most
+   often"), never as the definition or the scope.
+3. **Guard both failure modes.** Over-narrow framing → other sessions don't realize
+   the rule applies to them. Over-rigid framing → other sessions won't deviate when it
+   would make sense. The general-principle-plus-illustration shape avoids both.
