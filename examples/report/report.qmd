@@ -10,9 +10,12 @@ lightbox: true
 ---
 
 ::: {.callout-note}
-**tl;dr:** TODO — one or two sentences, glanceable. The single main outcome (the
-number and the comparison that matter) so a reader can tell at a glance whether to
-read on. Not a paragraph, not a section-by-section summary; caveats go in the body.
+**tl;dr:** TODO — one or two sentences, glanceable. State the single main outcome
+*qualitatively*, not as a number: a reader should grasp it at a glance and decide
+whether to read on. E.g. "model B substantially outperforms model A", "model B only
+moderately outperforms A", or "the difference is within the margin of error" — not
+"model B scores 0.73 vs 0.68". Precise numbers live in the body; a number here just
+makes the headline harder to digest. Not a paragraph, not a section-by-section summary.
 :::
 
 # Introduction
