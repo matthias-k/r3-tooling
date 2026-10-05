@@ -306,6 +306,22 @@ index instead:
   DAEMONS_final_sac.zip`) rather than checking out a whole job output. It states
   the real requirement, reads better in the job dir, and survives the upstream
   job gaining other outputs.
+- **Never hand-copy upstream results into a committed file — depend and read.** A
+  job's committed data must come from its **dependencies** or its **own
+  computation**, never pasted in from numbers you happen to have (from another
+  job's output, a prior run, or an orchestrator that handed them to you). A
+  committed `summary.json` / `leaderboard.json` assembled by hand *looks* like
+  provenance but has none: nothing links its numbers to the jobs that produced
+  them, so it silently goes stale or wrong and r3 cannot catch it. Instead
+  **depend on the upstream jobs** (list them, or `find_all` over a shared tag) and
+  have the job / `report.qmd` read each one's `results.json` **at run/render
+  time**. The rule of thumb: if a number appears in a committed artifact, there
+  must be a dependency path from that artifact to the job that computed it. This
+  bites hardest in aggregating jobs (meta-reports, leaderboards, cross-run
+  summaries) — exactly where it is most tempting to paste. (An orchestrator may
+  still *pass* such numbers into an agent's prompt as navigation hints, but the
+  committed report must recompute them from the dependency, not serialize the
+  hint.)
 - **r3-ignore an on-disk cache for expensive inputs.** A dev-tree directory
   listed in `r3.yaml`'s `ignore` (e.g. `pysaliency_datasets/` holding downloaded
   archives and expensive intermediates) makes a job cheap to re-run while
