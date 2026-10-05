@@ -18,7 +18,7 @@ CLONE_PROTO="ssh"
 R3_REMOTE=""                # default derived from proto
 FOREMAN_REMOTE=""           # default derived from proto
 R3_REF="main"
-FOREMAN_REF="main"
+FOREMAN_REF="dev"           # foreman tracks dev (newer features); r3 tracks main
 SLURM_HEADNODES=()
 SLURM_SUBMIT_HOST=""
 NO_SLURM=0
@@ -62,7 +62,7 @@ Layout:
 Sources:
   --clone-proto ssh|https        (default ssh)
   --r3-remote URL / --foreman-remote URL
-  --r3-ref REF / --foreman-ref REF   (default main)
+  --r3-ref REF / --foreman-ref REF   (defaults: r3 main, foreman dev)
 
 SLURM:
   --slurm-headnode HOST   (repeatable)   --slurm-submit-host HOST   --no-slurm
