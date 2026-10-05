@@ -10,9 +10,9 @@ lightbox: true
 ---
 
 ::: {.callout-note}
-**tl;dr:** TODO — the single most important result. State the number and the
-comparison that matter, as you'd say it if the reader read nothing else (not a
-section-by-section summary).
+**tl;dr:** TODO — one or two sentences, glanceable. The single main outcome (the
+number and the comparison that matter) so a reader can tell at a glance whether to
+read on. Not a paragraph, not a section-by-section summary; caveats go in the body.
 :::
 
 # Introduction
