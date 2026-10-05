@@ -1,0 +1,59 @@
+---
+title: "TODO: report title"
+format:
+  html:
+    code-fold: true
+    css: styles.css
+    toc: true
+jupyter: python3
+lightbox: true
+---
+
+::: {.callout-note}
+**tl;dr:** TODO — the single most important result. State the number and the
+comparison that matter, as you'd say it if the reader read nothing else (not a
+section-by-section summary).
+:::
+
+# Introduction
+
+What question does this report answer, and why? One short paragraph. Link the
+compute job(s) this report reads from.
+
+# Method
+
+How the numbers below were produced — enough for a reader to trust them, no more.
+Lean on the compute job's provenance; don't re-explain what the code already says.
+
+# Results
+
+```{python}
+# code-fold keeps this visible-but-collapsed in the HTML. Don't `#| echo: false`
+# a cell (it drops the code entirely); use `#| output: false` to hide noisy output.
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Read the *committed* compute output (a dependency), not a recomputation:
+# df = pd.read_csv("compute/output/results.csv")
+headline = 0.0  # TODO: compute from the data, near where it's used
+```
+
+TODO: a table or figure carries the result; don't narrate what the figure shows.
+Quote numbers from the computation, never hand-typed — e.g. the headline value is
+`{python} f"{headline:.2f}"`, so the prose can't drift from the analysis.
+
+# Discussion
+
+What the results mean, caveats, where they might mislead. Terse.
+
+# Follow up ideas
+
+Seed future brainstorms here — concrete next experiments this one suggests. An
+open-ended "explore the data and report anything interesting" pass is welcome
+(trim later).
+
+# Appendix
+
+Supporting detail that would clutter the body: extra figures, parameter dumps,
+sanity checks.

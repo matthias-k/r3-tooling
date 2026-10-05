@@ -33,10 +33,12 @@ live in the linked docs (this file is the map, not the spec).
    labeled examples (most environment values already live in `xr3.yaml` + `SETUP.md`, so this is lighter
    than it looks) so colleagues can adopt it on their laptops. Fallback: a `workshop` branch that strips
    specifics.
-3. **`examples/`** — turn the `auto_submit.py` / `setup_tasks.py` family (which still call the
-   now-obsolete monolith) into documented, adaptable templates colleagues can copy, and
-   repoint them at `xr3` / `xr3-slurm`. Spec §10. Candidate additions (workshop): an example singularity
-   build script and an example **venv-based environment r3 job** (the off-cluster environment provider).
+3. **`examples/`** — *started*: the house **report scaffold** lives in `examples/report/`
+   (`report.qmd` + `styles.css`; `RESEARCH_WORKFLOW.md` points at it). Still to add: turn the
+   `auto_submit.py` / `setup_tasks.py` family (which still call the now-obsolete monolith) into
+   documented, adaptable templates colleagues can copy, repointed at `xr3` / `xr3-slurm` (Spec §10);
+   an example singularity build script; and an example **venv-based environment r3 job** (the
+   off-cluster environment provider). See `examples/README.md` for the running index.
 
 ## Finer-grained / tool-level
 

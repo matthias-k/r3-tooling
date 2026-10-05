@@ -589,9 +589,10 @@ First used in the MathTutorBench zero-shot-baseline (the OpenRouter judge run,
   — it drops the code from the rendered HTML entirely (not even uncollapsible).
   Suppressing *output* (`#| output: false`) is fine, e.g. to keep loading noise out
   of the report.
-- **Report sections**: house template is `research/experiments/report_template/`
+- **Report sections**: copy the scaffold in [`examples/report/`](examples/report/)
   — a `tl;dr` callout, then Intro / Method / Results / **Discussion** /
-  **Follow up ideas** / Appendix. Keep a "Follow up ideas" section to seed future
+  **Follow up ideas** / Appendix (render single-format HTML: `quarto render
+  report.qmd --to html`). Keep a "Follow up ideas" section to seed future
   brainstorms; write future-experiment ideas there. An open-ended "let the agent
   explore the data and report anything interesting" section is welcome (trim
   later).

@@ -46,6 +46,9 @@ confusion. Full details — flags, manual steps, SLURM, the foreman tunnel — a
   `run.sh`/environment, reports, gotchas).
 - **[`agent-context.md`](agent-context.md)** — a short pointer you `@`-import into a
   `CLAUDE.md` so agents auto-discover the workflow (the installer can wire this for you).
+- **[`examples/`](examples/README.md)** — copy-and-adapt starting points for the pieces
+  the workflow describes (the report scaffold today; container/venv jobs and the sweep
+  helpers to come).
 - **`bootstrap.sh` / `install.sh`** — the one-command installer (above).
 
 ## Using the r3 skill on its own
@@ -69,8 +72,8 @@ out jobs, the Python API, tracing lineage — or you can invoke it explicitly.
   dependencies + query grammar, the CLI + Python API, r3's non-obvious behaviors). **No `xr3`, no house
   conventions, no galvani specifics** — kept **upstream-ready** so it can move into r3 itself whenever (a
   directory move, not a disentangling job). Verified against r3 `main` (validity stamp in `SKILL.md`).
-- **`extensions/`** — the house layer on top: the `xr3` / `xr3-slurm` tool suite and (to come) examples and
-  the galvani `g` helper. These *reference* the pure skill and never leak into it. (The house *workflow*
+- **`extensions/`** — the house layer on top: the `xr3` / `xr3-slurm` tool suite (plus
+  [`examples/`](examples/README.md), started, and the galvani `g` helper to come). These *reference* the pure skill and never leak into it. (The house *workflow*
   conventions — how the tools are actually used — live in the top-level [`RESEARCH_WORKFLOW.md`](RESEARCH_WORKFLOW.md).) **These tools add assumptions to your r3 jobs — see
   [`extensions/CONTRACT.md`](extensions/CONTRACT.md).**
 
@@ -87,7 +90,7 @@ Vendored in [`extensions/`](extensions/README.md):
 conventions, SLURM config, …). Those, and what breaks without them, are the single source of truth in
 **[`extensions/CONTRACT.md`](extensions/CONTRACT.md)** — read it before pointing the tools at your jobs.
 
-What's next (the `xr3` skill, `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
+What's next (the `xr3` skill, more `examples/`) is in **[`ROADMAP.md`](ROADMAP.md)**.
 
 ## Also in here (build provenance / maintenance)
 
@@ -105,8 +108,9 @@ Not needed to *use* the toolchain:
 - **`skills/r3/` — built, reviewed, on `main`.** Verified against r3 `main` `262a937` / v0.5.0; the
   `SKILL.md` validity stamp + a `git log <stamp>..main` recipe let a later session keep it current.
 - **`extensions/` — the `xr3` / `xr3-slurm` suite is vendored** (extracted from the galvani `xr3` monolith:
-  config-externalized, SLURM split into `xr3-slurm`, documented in `CONTRACT.md` + per-tool READMEs). Still
-  to come: `examples/`, the galvani `g` helper.
+  config-externalized, SLURM split into `xr3-slurm`, documented in `CONTRACT.md` + per-tool READMEs).
+  `examples/` started (the report scaffold); still to come there: container/venv job examples, the sweep
+  helpers, the galvani `g` helper.
 - Remote-storage is held out of the skill for now (alpha post-merge); ⚠ path-promotion is idea-stage
   upstream and will eventually change `find` (the skill flags it).
 
