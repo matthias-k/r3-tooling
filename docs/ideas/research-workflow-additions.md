@@ -1,98 +1,92 @@
-# Candidate additions for `RESEARCH_WORKFLOW.md`
+# Candidate additions for `RESEARCH_WORKFLOW.md` (+ the r3 skill)
+
+Staging queue for house-workflow conventions not yet folded into
+[`RESEARCH_WORKFLOW.md`](../../RESEARCH_WORKFLOW.md) (or, where they are pure-r3 truths, the
+[`r3` skill](../../skills/r3/)). A hub/tooling session integrates these, then clears them from here.
+Each item is tagged **[NEW?]** (probably missing) or **[CHECK]** (may already be covered — verify
+against the live doc before writing).
 
 > The assumptions the `xr3` / `xr3-slurm` tools place on jobs (the `output/done` marker, the
 > `tags[0]`/`metadata.path` conventions, pathmap, SLURM config) are the single source of truth in
-> [`CONTRACT.md`](CONTRACT.md); `RESEARCH_WORKFLOW.md` should **link** it rather than restate it. The
-> conventions below are the *house workflow* around those tools.
+> [`extensions/CONTRACT.md`](../../extensions/CONTRACT.md); `RESEARCH_WORKFLOW.md` should **link** it
+> rather than restate it. The conventions below are the *house workflow* around those tools.
 
-
-House conventions observed in the real r3 repo store + `projects/` tree (and confirmed while building the
-pure r3 skill) that look **under- or un-documented** in the current `RESEARCH_WORKFLOW.md`. These are for
-the *house* doc, not the pure r3 skill. Each item is tagged **[NEW?]** (probably not yet in the workflow
-doc) or **[CHECK]** (may already be covered — verify). Source: the free-exploration audit of
-`…/mkuemmerer31/r3_repo` + `…/projects`, cross-checked against r3 `main`.
-
----
-
-## 1. The `metadata.yaml` field schema  **[NEW? — the biggest gap]**
-
-The workflow doc describes *how you work*, but not the **metadata field conventions** every job carries.
-Worth codifying, because tooling (`xr3 check`, `find`) and readers depend on them:
-
-- **`path`** — project-prefixed virtual path (`<project>/…`), globally unique via the prefix. *(This is the
-  convention you're separately fixing for `gaze-combined-datasets` — see the lustre-migration prompt.)*
-- **`tags`** — a list where:
-  - `tags[0]` is the **primary version tag** = `<path>/vX.Y.Z`, and the path is *also* emitted as **nested
-    tags with `/vX.Y.Z` at each truncation level** (e.g. `…/crossval3_seed42/v1.0.0`, `…/CAT2000/v1.0.0`,
-    `…/tasks/v1.0.0`, `…/tasks`) — this is what lets `find --tag` match at multiple granularities;
-  - plus **identity tags**: username, cluster (`galvani`), project;
-  - **job-type tags**: `analysis`, `report`, `autoslurm`, colon-namespaced `autoslurm:restart_failed`;
-  - **`bug/<name>`** tags (mark a job buggy; `xr3 check`/`dev-checkout` refuse deps carrying one).
-- **`version`** — *not* a scalar; a **`versions:` changelog list** of `{comment, version}` entries.
-- **`origin`** — ≈ `path` at authoring time; the immutable authoring-folder record vs. the mutable `path`.
-- **`projects`** — the project name (a `find` disambiguator; being retired by the path-prefix convention).
-- **`scheduler`** — `{automode, cluster, restart_failed}` (auto-submission state).
-- **`task_meta`** / (older) **`gridsearch_meta`** — per-job hyperparameters (lr, seed, dataset, decays…).
-- **`post_hoc_modifications`** — a list of `{action, timestamp}` (e.g. "deleted model checkpoints"); the
-  concrete form of the workflow doc's "record an emptied `output/` in metadata."
-- **`WIP`** — a list of work-in-progress items; `xr3 check` blocks commit while it is non-empty.
-- **`comment`** — free-text.
-
-## 2. Job archetypes beyond the compute job  **[NEW?]**
-
-The doc's two-job split (compute + report) implies every job "runs and writes `output/`," but real jobs
-include archetypes worth naming — **a job need not have a classical run file**:
-
-- **Provider / server jobs** — e.g. a model job whose `run.sh` starts a local **HTTP server** serving the
-  model; a downstream eval job checks it out and queries it (`run_inner.sh`: `if [ -d server ]` → start
-  server, `curl http://localhost:$PORT/type` until ready, then run the client). Seen across
-  `saliency-benchmarking/evaluation/tasks/*`. This is a genuinely different pattern from "compute →
-  `output/`" and deserves a short section.
-- **Container jobs** — a Singularity `.sif` is itself **built as an r3 job** and consumed by others via
-  `find_latest: {path: research/containers/default}, source: output/container.sif`. *(The doc mentions
-  "cut a container revision"; the "container is an r3 job you depend on" mechanic may be worth making
-  explicit.)* **[CHECK]**
-- **Source / entry-node jobs (`_raw`, `src`)** — for non-public datasets and prior-work models, a minimal
-  job (a `README.md` documenting the data's origin + `metadata.yaml`, **no run file**) is committed and its
-  `output/` **hand-populated** with the external data, introducing it into the provenance graph as a
-  labeled **entry node** that downstream jobs depend on. Real examples: `datasets/MIT300_raw`,
-  `datasets/CAT2000_raw`, `…/local_global_attention_model/src` (the README carries the human provenance,
-  e.g. "raw data received from X, manually copied to output"). Worth standardizing as *the* documented way
-  to depend on un-provenanced external data until r3 has a first-class option — you flagged exactly this.
-
-## 3. ⚠ Correctness hazard: downstream can't read a dependency's `metadata.yaml`  **[NEW? — important]**
-
-A checkout (including `r3 checkout` and any recursive-copy dependency) **omits the job's `metadata.yaml`
-and `r3.yaml`** — verified against r3 `main` (`storage.checkout_job`). So a downstream job that fans in
-upstreams (`find_all`) and wants their **hyperparameters** *cannot* read them from `task_meta` /
-`gridsearch_meta` in the checked-out dep's `metadata.yaml` — that file isn't there. **House implication:**
-keep such parameters in **both** places — `task_meta` (for *querying*, which is the whole point of params
-in metadata) **and** a **committed regular file** (e.g. `config.yaml`, so a downstream consumer can read
-them back across a checkout). Worth a one-line warning in the doc, since the house habit is to put params
-in `task_meta` alone.
-
-## 4. `run.sh` → `run_inner.sh` + SLURM/Singularity structure  **[CHECK]**
-
-The doc calls these "host/SLURM wrappers"; the concrete structure seen everywhere: outer `run.sh` checks
-out to `$SCRATCH/job` and dispatches; `run_inner.sh` runs `singularity exec --nv` with `PYTHONPATH` set to
-the checked-out repos, and uses an **`output/done` idempotency marker** so a resubmit skips finished work.
-If not already spelled out, a canonical template would help.
-
-## 5. What `xr3 check` actually enforces  **[CHECK]**
-
-`xr3 check` encodes the conventions above — it fails on: `path`/`origin` ≠ the job's location; `tags[0]`
-not matching `<path>/vN`; any dependency carrying a `bug/…` tag; a non-empty `WIP`; and any
-staged/unstaged/untracked change in a checked-out git dep. Listing these makes the conventions
-self-documenting (and is a good spec for anyone re-implementing `check`).
-
-## 6. Repo-store housekeeping  **[FYI, not workflow]**
-
-The real `r3_repo` store also carries legacy `index.yaml`, `backup/`, and `git_old/` beside the live
-`index.sqlite`/`git/`. Current r3 uses only `index.sqlite`; the rest is harmless cruft you may want to
-prune at some point.
+> **History.** The original batch (the metadata-field schema, job archetypes, the
+> checkout-omits-`metadata.yaml` hazard, the `run.sh`/`output/done` structure, what `check` enforces,
+> repo-store housekeeping) was mined from the real r3 store in 2026-08 and **fully folded into
+> `RESEARCH_WORKFLOW.md` on 2026-09-29** (housekeeping landed in `docs/r3-upstream-doc-issues.md`
+> instead). This file was then emptied and is now the live queue for *new* candidates.
 
 ---
 
-*Everything here is house-layer. The pure r3 truths behind them (checkout omits metadata; container/model
-jobs are just jobs with `output/`; `path`/`tags` are conventions r3's core doesn't read) are already in the
-pure skill; this doc is only the house conventions layered on top.*
+Source: the Agentic-Science-Hub gold-density case study
+(`case-studies/2026-08-gold-density-precompute.md`). Most of that case study's r3 lessons —
+resumability (whole-output-`tmp` failure mode, HDF5 append-resume, deterministic-failure caveat),
+params-as-committed-file, dev-render — are **already** in `RESEARCH_WORKFLOW.md` (§Resumable jobs even
+cites the `gold_density` job). The items below are the residue that is *not* yet captured.
+
+## 1. Recursive-checkout *sourcing* as a workflow decision  **[NEW? — the main gap]**
+
+`recursive_checkout` is documented in the r3 skill as a *mechanism* (it's the default for a job
+dependency: `source: "."` + `recursive_checkout: true` → a recursive real copy of the whole upstream
+job). What's missing is the **house decision** of when to lean on it — and it's the explicit
+counterpoint to the existing *"Narrow dependencies with `source:`"* bullet in §Config & dependencies.
+
+- **When.** A downstream job needs several heterogeneous inputs an upstream job already assembled — its
+  `config.yaml` + its own dependencies (regularizers, data) + its frozen `output/` — and you'd
+  otherwise re-declare or reconstruct each one downstream.
+- **How.** Add *one* dependency that recursively checks the whole upstream job into a subdir
+  (`find_latest: {path: <upstream>} → destination: model`, the `source: "."` + `recursive_checkout:
+  true` defaults). It materializes the upstream's config, its deps (symlinked), and its `output/`. The
+  consumer reads config + deps + params from that subdir (scoped `chdir` so relative paths resolve).
+  Keep any library the consumer must *import* at top level — do **not** import from the upstream's
+  pinned copy inside the subdir.
+- **The two poles.** *Narrow with `source:`* when you consume one file; *recursive-checkout sourcing*
+  when you need the upstream's whole assembled input environment. Same decision, opposite ends.
+- **Pitfalls.** (1) Peak resource use is the upstream's — not reduced by this. (2) The recursive copy
+  duplicates the upstream's git repos into scratch at checkout (harmless, not committed, but real disk
+  at runtime). (3) **`chdir` output footgun** — resolve output paths to absolute (`.resolve()`)
+  *before* chdir-ing into the subdir, or output lands in the wrong place.
+- **When NOT to.** When you must *vary* those inputs, or the upstream isn't committed yet (reconstruct
+  from a registry so staged cells still generate).
+- **Evidence.** n=2: gold-density (collapsed a 4-part per-variant wiring layer to one dep across 19
+  jobs); the earlier `effect-on-CC` report used the same shape. Target: §Config & dependencies (a new
+  bullet beside "Narrow dependencies with `source:`").
+
+## 2. Resumability blind spot: an expensive un-resumable *prefix*  **[NEW?]**
+
+§Resumable jobs already covers per-unit checkpointing, whole-output-`tmp` as an anti-pattern, and a
+*deterministic per-unit failure* looping forever. A third failure mode is missing: **resumability is a
+property of the whole restart cost, not of one loop.** An expensive, un-resumable *prefix* that reruns
+on every attempt defeats a perfectly resumable inner loop.
+
+- **The trap.** In gold-density's CAT2000 thrash, a ~16-min subject-model build ran *before* the
+  resumable export on every resubmit, so ~40 preempt/OOM attempts netted ~18 of 2000 images while
+  burning ~10 h in rebuilds. The strategy degrades to `prefix_cost × failures`.
+- **Fix.** Make the prefix resumable too (cache it to a keyed on-disk store), or don't rely on
+  preempt/resubmit for that job. Measure *end-to-end* restart cost, not just the inner loop.
+- Target: §Resumable jobs — add to the caveats (beside the deterministic-failure one).
+
+## 3. Availability check: stat the output, not the index  **[NEW?]**
+
+In a commit-≠-run system, "the job is in the index" ≠ "the job produced its output." A readiness check
+that downstream work depends on must **stat the actual artifact** (`jobs/<uuid>/output/parameters.csv`
+/ the `output/done` marker), not just that `xr3 find` returns the job.
+
+- **Evidence.** gold-density hit this: 3 upstream jobs were committed but had not yet produced
+  `parameters.csv`. Target: §Finding jobs (a short caution), or fold into the §Resumable `output/done`
+  note (consumers gate on `done`, not on existence).
+
+## 4. Minor / **[CHECK]** — probably already covered, verify before adding
+
+- **Quarto local dev-render mechanics.** §Reports & writing has "dev-render before committing"
+  (`xr3 dev-checkout .`, render in the working dir). The operational detail may be worth a line:
+  `PYTHONPATH=<checked-out dep repos> quarto render report.qmd --to html --output-dir output_smoke`
+  — the `PYTHONPATH` is the dev-checked-out deps (as in `run_inner.sh`), not a base-env install (stock
+  python lacks `pysaliency` etc.); probe first (`which quarto`, `import pysaliency`, `nvidia-smi`) and
+  write ad-hoc renders to `output_smoke/`, never the real `output/`. **[CHECK]** against §Reports.
+- **Standalone `task_meta.yaml` root file.** §Config & dependencies already says "commit params a
+  downstream reads as a file, not only `task_meta`." The gold-density nuance: a *standalone committed
+  `task_meta.yaml` root file* survives checkout (checkout drops `metadata.yaml` but keeps other root
+  files), and can be composed from the source job's own `task_meta.yaml` + the new job's fields.
+  **[CHECK]** whether this positive prescription adds anything over the existing bullet.

@@ -99,7 +99,8 @@ Not needed to *use* the toolchain:
 - `docs/specs/` — the design spec · `docs/superpowers/plans/` — the build plan.
 - `docs/r3-upstream-doc-issues.md` — doc/code fixes to make in the r3 repo upstream.
 - `docs/ideas/` — rough thoughts / planned additions not yet folded in (the `xr3` skill; the
-  `research-workflow-additions.md` conventions to migrate). Indexed and prioritized in `ROADMAP.md`.
+  `research-workflow-additions.md` staging queue for new `RESEARCH_WORKFLOW.md` candidates — its
+  original batch was folded in 2026-09-29). Indexed and prioritized in `ROADMAP.md`.
 - `raw-material/r3-findings.md` — the **verified mined knowledge base** the skill was authored from
   (dense working material; kept for re-verifying the skill against future r3 versions).
 
