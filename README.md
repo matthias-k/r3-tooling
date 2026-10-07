@@ -25,8 +25,8 @@ rather than silently taking defaults.
 > ```bash
 > git clone https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
 > ```
-> `r3` and `r3-tooling` are public; `foreman` is still private, so its clone needs GitHub
-> access — the installer's default `--clone-proto ssh` handles that.
+> `r3`, `r3-tooling`, and `foreman` (via its public mirror `foreman-ai-builder-camp`) are all
+> public, so `--clone-proto https` installs the whole toolchain without any GitHub key setup.
 
 Re-run any time to update — the installer saves a `<toolchain-root>/update.sh`. Everything
 lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?"

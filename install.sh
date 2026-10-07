@@ -18,7 +18,7 @@ CLONE_PROTO="ssh"
 R3_REMOTE=""                # default derived from proto
 FOREMAN_REMOTE=""           # default derived from proto
 R3_REF="main"
-FOREMAN_REF="dev"           # foreman tracks dev (newer features); r3 tracks main
+FOREMAN_REF="main"          # foreman-ai-builder-camp's default branch mirrors upstream dev; r3 tracks main
 SLURM_HEADNODES=()
 SLURM_SUBMIT_HOST=""
 NO_SLURM=0
@@ -62,7 +62,7 @@ Layout:
 Sources:
   --clone-proto ssh|https        (default ssh)
   --r3-remote URL / --foreman-remote URL
-  --r3-ref REF / --foreman-ref REF   (defaults: r3 main, foreman dev)
+  --r3-ref REF / --foreman-ref REF   (defaults: r3 main, foreman main)
 
 SLURM:
   --slurm-headnode HOST   (repeatable)   --slurm-submit-host HOST   --no-slurm
@@ -203,9 +203,9 @@ resolve_defaults() {
     [ "$CLONE_PROTO" = "https" ] && R3_REMOTE="https://$host/mtangemann/r3.git" || R3_REMOTE="git@$host:mtangemann/r3.git"
   fi
   if [ -z "$FOREMAN_REMOTE" ]; then
-    # foreman's upstream (mtangemann) is private and colleagues may lack access;
-    # default to the matthias-k fork, which access can be granted on. Override with --foreman-remote.
-    [ "$CLONE_PROTO" = "https" ] && FOREMAN_REMOTE="https://$host/matthias-k/foreman.git" || FOREMAN_REMOTE="git@$host:matthias-k/foreman.git"
+    # foreman's upstream (mtangemann) is private; foreman-ai-builder-camp is a PUBLIC
+    # mirror of its dev branch so colleagues can install without access. Override with --foreman-remote.
+    [ "$CLONE_PROTO" = "https" ] && FOREMAN_REMOTE="https://$host/matthias-k/foreman-ai-builder-camp.git" || FOREMAN_REMOTE="git@$host:matthias-k/foreman-ai-builder-camp.git"
   fi
 }
 
@@ -223,7 +223,7 @@ phase_preflight() {
     if ssh -T -o BatchMode=yes -o ConnectTimeout=8 git@github.com 2>&1 | grep -qi "successfully authenticated"; then
       info "github ssh access ok"
     else
-      warn "github ssh auth not confirmed; foreman is private and its clone may fail."
+      warn "github ssh auth not confirmed; private repo clones may fail."
       warn "use --clone-proto https for public repos, or set up an ssh key for github."
     fi
   fi
