@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # bootstrap.sh — clone r3-tooling into a single canonical location and run its installer.
 #
-# Only needs git. Intended to be curl'd (once the repo is public):
-#   curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash
+# Only needs git. Intended to be curl'd (builder-camp = the public workshop branch):
+#   curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/builder-camp/bootstrap.sh | bash
 # or downloaded and run. It asks for the toolchain directory, clones
 # r3-tooling into <toolchain-root>/r3-tooling, and hands off to that clone's
 # install.sh (passing --toolchain-root through). Any extra flags are forwarded to
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 TOOLCHAIN_ROOT=""
-BRANCH="main"
+BRANCH="builder-camp"       # workshop branch: installs foreman from the public mirror
 R3TOOLING_REMOTE="https://github.com/matthias-k/r3-tooling.git"   # public; override with --r3-tooling-remote
 ASSUME_YES=0
 FORWARD=()

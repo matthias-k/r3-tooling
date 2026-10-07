@@ -10,7 +10,7 @@ agent-facing **r3 skill**, the **`xr3` / `xr3-slurm`** command-line tools, the h
 One command sets up r3 + xr3/xr3-slurm + foreman:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/matthias-k/r3-tooling/builder-camp/bootstrap.sh | bash
 ```
 
 It prompts for the toolchain directory and the other settings — locations, SLURM head node,
@@ -23,7 +23,7 @@ rather than silently taking defaults.
 
 > Prefer to clone first (to read the script or hack on it)? Same result:
 > ```bash
-> git clone https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
+> git clone -b builder-camp https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
 > ```
 > `r3`, `r3-tooling`, and `foreman` (via its public mirror `foreman-ai-builder-camp`) are all
 > public, so `--clone-proto https` installs the whole toolchain without any GitHub key setup.
