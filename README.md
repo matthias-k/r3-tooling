@@ -26,7 +26,7 @@ rather than silently taking defaults.
 > git clone -b builder-camp https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
 > ```
 > `r3`, `r3-tooling`, and `foreman` (via its public mirror `foreman-ai-builder-camp`) are all
-> public, so `--clone-proto https` installs the whole toolchain without any GitHub key setup.
+> public, so the default `--clone-proto https` installs the whole toolchain without any GitHub key setup.
 
 Re-run any time to update — the installer saves a `<toolchain-root>/update.sh`. Everything
 lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?"

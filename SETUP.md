@@ -16,7 +16,7 @@ Install `skills/r3/` where your Claude Code (or codex) finds skills (see the top
 ## 1. Quickstart — the installer
 
 ```bash
-git clone git@github.com:matthias-k/r3-tooling.git r3-tooling && cd r3-tooling
+git clone -b builder-camp https://github.com/matthias-k/r3-tooling.git r3-tooling && cd r3-tooling
 ./install.sh --yes        # accept all defaults, no prompts
 # or, to preview first:
 ./install.sh --dry-run
@@ -63,15 +63,15 @@ Common flags (all have real defaults, so `--yes` alone is a complete install):
 - `--r3-repo DIR` (default `~/r3_repo`) — becomes `R3_REPOSITORY`.
 - `--slurm-headnode HOST` (repeatable) / `--slurm-submit-host HOST` / `--no-slurm` — SLURM
   config for `xr3-slurm`, or opt out of it entirely.
-- `--clone-proto ssh|https` (default `ssh`) — how `r3` and `foreman` are cloned.
+- `--clone-proto ssh|https` (default `https`) — how `r3` and `foreman` are cloned.
 - `--install-skill` / `--no-install-skill` (plus `--skill-target all|claude|codex`) — install
   the r3 agent skill from §0 as part of the same run.
 
 `foreman`'s upstream (`mtangemann/foreman`) is **private**, so the installer defaults to
 [`matthias-k/foreman-ai-builder-camp`](https://github.com/matthias-k/foreman-ai-builder-camp) —
 a **public** mirror of its `dev` branch (the newer features), tracked on `main`. Because it's
-public, `--clone-proto https` clones the whole toolchain without any GitHub key setup; the default
-`ssh` proto still needs your key (the installer checks this in preflight and warns if it can't
+public, the default `--clone-proto https` clones the whole toolchain without any GitHub key setup;
+`--clone-proto ssh` needs your key (the installer checks this in preflight and warns if it can't
 confirm access). Point `--foreman-remote` / `--foreman-ref` elsewhere if you have direct access to
 the upstream repo.
 
@@ -120,8 +120,8 @@ uv venv --python 3.12 ~/r3-toolchain/.venv
 ### 3.2 Clone and editable-install r3 and foreman
 
 ```bash
-git clone git@github.com:mtangemann/r3.git ~/r3-toolchain/r3
-git clone git@github.com:matthias-k/foreman-ai-builder-camp.git ~/r3-toolchain/foreman   # public mirror of upstream foreman's dev branch
+git clone https://github.com/mtangemann/r3.git ~/r3-toolchain/r3
+git clone https://github.com/matthias-k/foreman-ai-builder-camp.git ~/r3-toolchain/foreman   # public mirror of upstream foreman's dev branch
 
 uv pip install --python ~/r3-toolchain/.venv/bin/python \
   -e ~/r3-toolchain/r3 -e ~/r3-toolchain/foreman
