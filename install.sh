@@ -14,7 +14,7 @@ BIN_DIR=""                  # default: ~/bin, or $LUSTREWORK/bin if it exists
 CONFIG_PATH="$HOME/.config/xr3.yaml"
 PROJECTS_DIR="$HOME/projects"
 R3_REPO="$HOME/r3_repo"
-CLONE_PROTO="ssh"
+CLONE_PROTO="https"
 R3_REMOTE=""                # default derived from proto
 FOREMAN_REMOTE=""           # default derived from proto
 R3_REF="main"
@@ -26,6 +26,7 @@ INSTALL_SKILL="prompt"      # prompt | yes | no (resolved to yes/no in interacti
 SKILL_TARGET="all"          # all | claude | codex
 IMPORT_CONTEXT="prompt"     # prompt | yes | no — add the workflow @import to a CLAUDE.md
 CONTEXT_CLAUDE_MD="$HOME/.claude/CLAUDE.md"   # target for the @import (--import-context)
+INSTALL_FEEDBACK="prompt"   # prompt | yes | no — install the r3-feedback observer (opt-out; default on)
 ASSUME_YES=0
 INTERACTIVE=0               # resolved in main(): 1 = prompt on a tty, 0 = --yes/non-interactive
 DRY_RUN=0
@@ -60,7 +61,7 @@ Layout:
   --r3-repo DIR          (default ~/r3_repo) R3_REPOSITORY
 
 Sources:
-  --clone-proto ssh|https        (default ssh)
+  --clone-proto ssh|https        (default https)
   --r3-remote URL / --foreman-remote URL
   --r3-ref REF / --foreman-ref REF   (defaults: r3 main, foreman main)
 
@@ -69,8 +70,9 @@ SLURM:
 
 Skill:
   --install-skill / --no-install-skill   --skill-target all|claude|codex
+  --feedback / --no-feedback             r3-feedback observer (local-only; opt-out, default on)
 
-Agent context (point agents at RESEARCH_WORKFLOW.md via a CLAUDE.md @import):
+Agent context (point agents at RESEARCH_WORKFLOW.md — CLAUDE.md @import / AGENTS.md pointer):
   --import-context / --no-import-context   --context-claude-md PATH  (default ~/.claude/CLAUDE.md)
 
 Modes:
@@ -136,6 +138,8 @@ parse_args() {
       --import-context) IMPORT_CONTEXT="yes"; shift;;
       --no-import-context) IMPORT_CONTEXT="no"; shift;;
       --context-claude-md) reqval "$@"; CONTEXT_CLAUDE_MD="$2"; shift 2;;
+      --feedback) INSTALL_FEEDBACK="yes"; shift;;
+      --no-feedback) INSTALL_FEEDBACK="no"; shift;;
       --yes|-y) ASSUME_YES=1; shift;;
       --dry-run) DRY_RUN=1; shift;;
       --no-update) NO_UPDATE=1; shift;;
@@ -191,6 +195,15 @@ interactive_config() {
       IMPORT_CONTEXT=no
     fi
   fi
+  # Feedback-observer decision (resolve "prompt" -> yes/no now; opt-out, default yes).
+  if [ "$INSTALL_FEEDBACK" = "prompt" ]; then
+    if [ "$INTERACTIVE" -eq 1 ]; then
+      local fb=""; read -r -p "  install the r3-feedback observer? (local-only notes you can choose to share) (yes/no) [yes]: " fb < /dev/tty || true
+      case "${fb:-yes}" in y|Y|yes|YES) INSTALL_FEEDBACK=yes;; *) INSTALL_FEEDBACK=no;; esac
+    else
+      INSTALL_FEEDBACK=yes
+    fi
+  fi
 }
 
 resolve_defaults() {
@@ -213,7 +226,9 @@ resolve_defaults() {
 phase_preflight() {
   info "preflight: checking prerequisites"
   local missing=0
-  for tool in git ssh; do
+  local tools="git"
+  [ "$CLONE_PROTO" = "ssh" ] && tools="git ssh"
+  for tool in $tools; do
     command -v "$tool" >/dev/null 2>&1 || { err "missing required tool: $tool"; missing=1; }
   done
   [ "$missing" -eq 1 ] && { err "install the missing tools and re-run"; exit 1; }
@@ -431,46 +446,117 @@ dev_checkout:
 EOF
   info "wrote $target"
 }
+# link_agent_skill ROOT SKILLS_DIR SRC NAME: symlink a skill dir into an agent's skills dir.
+# Skips when the agent isn't installed (ROOT absent); otherwise creates SKILLS_DIR if needed, so
+# the link lands even on an agent that hasn't populated its skills dir yet. Both Claude Code
+# (~/.claude/skills) and Codex (~/.codex/skills) load Anthropic-format SKILL.md skills this way.
+link_agent_skill() {
+  local root="$1" sdir="$2" src="$3" name="$4"
+  [ -d "$root" ] || { info "skill: $root absent (agent not installed); skipping $name"; return; }
+  run mkdir -p "$sdir" || { warn "skill: cannot create $sdir; skipping $name"; return; }
+  if [ -e "$sdir/$name" ] && [ ! -L "$sdir/$name" ]; then
+    warn "skill: $sdir/$name exists and is not a symlink; skipping"; return
+  fi
+  run ln -sfn "$src" "$sdir/$name" && info "skill linked -> $sdir/$name" \
+    || warn "could not link $name into $sdir"
+}
 phase_skill() {
   # INSTALL_SKILL is resolved to yes/no in interactive_config (or by a flag).
   [ "$INSTALL_SKILL" = "yes" ] || { info "skill install: skipped"; return; }
-
   local src="$REPO_DIR/skills/r3"
-  link_skill() { # AGENT_DIR
-    local d="$1"
-    [ -d "$d" ] || { info "skill: $d absent, skipping"; return; }
-    if [ -e "$d/r3" ] && [ ! -L "$d/r3" ]; then warn "skill: $d/r3 exists and is not a symlink; skipping"; return; fi
-    run ln -sfn "$src" "$d/r3" || { warn "could not link skill into $d"; return; }
-    info "skill linked -> $d/r3"
-  }
   case "$SKILL_TARGET" in
-    claude) link_skill "$HOME/.claude/skills";;
-    codex)  link_skill "$HOME/.codex/skills";;
-    all|*)  link_skill "$HOME/.claude/skills"; link_skill "$HOME/.codex/skills";;
+    claude) link_agent_skill "$HOME/.claude" "$HOME/.claude/skills" "$src" r3;;
+    codex)  link_agent_skill "$HOME/.codex"  "$HOME/.codex/skills"  "$src" r3;;
+    all|*)  link_agent_skill "$HOME/.claude" "$HOME/.claude/skills" "$src" r3
+            link_agent_skill "$HOME/.codex"  "$HOME/.codex/skills"  "$src" r3;;
   esac
 }
-# phase_agent_context: point agents at the workflow. Always prints the @import line;
-# adds it to a CLAUDE.md only when opted in (interactive yes, or --import-context).
+# phase_agent_context: point agents at the workflow. Always prints the @import line; wires it in
+# only when opted in (interactive yes, or --import-context). Claude: an @import in the configured
+# CLAUDE.md. Codex: AGENTS.md is the global-guidance analog but doesn't do @-imports, so we write a
+# prose pointer by path. Each is written per --skill-target, and Codex only when ~/.codex exists.
 phase_agent_context() {
   local ctx="$REPO_DIR/agent-context.md" line
   line="@$ctx"
   printf '\n'
-  info "Agent discovery — add this line to a CLAUDE.md so sessions auto-follow the workflow:"
+  info "Agent discovery — add this to a CLAUDE.md (Claude) / AGENTS.md (Codex) so sessions auto-follow the workflow:"
   printf '  %s\n' "$line"
-  info "(in ~/.claude/CLAUDE.md it loads with no approval prompt; a project CLAUDE.md prompts once — check with /context)"
+  info "(in ~/.claude/CLAUDE.md the @import loads with no approval prompt; a project CLAUDE.md prompts once — check with /context)"
   [ "$IMPORT_CONTEXT" = "yes" ] || return 0   # print-only; explicit 0 so set -e doesn't abort main
 
-  local target="${CONTEXT_CLAUDE_MD/#\~/$HOME}"
-  if [ "$DRY_RUN" -eq 1 ]; then info "(dry-run) would add the import to $target"; return; fi
-  if [ -f "$target" ] && grep -qF "agent-context.md" "$target" 2>/dev/null; then
-    info "context import already present in $target; leaving it"; return
+  # Claude Code: @import into the configured CLAUDE.md.
+  if [ "$SKILL_TARGET" = "all" ] || [ "$SKILL_TARGET" = "claude" ]; then
+    local target="${CONTEXT_CLAUDE_MD/#\~/$HOME}"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      info "(dry-run) would add the workflow import to $target"
+    elif [ -f "$target" ] && grep -qF "agent-context.md" "$target" 2>/dev/null; then
+      info "context import already present in $target; leaving it"
+    elif mkdir -p "$(dirname "$target")" 2>/dev/null \
+         && printf '\n# r3 research workflow — maintained in r3-tooling\n%s\n' "$line" >> "$target"; then
+      info "added the context import to $target"
+    else
+      warn "could not write $target"
+    fi
   fi
-  mkdir -p "$(dirname "$target")" 2>/dev/null || { warn "cannot create dir for $target"; return; }
-  if printf '\n# r3 research workflow — maintained in r3-tooling\n%s\n' "$line" >> "$target"; then
-    info "added the context import to $target"
-  else
-    warn "could not write $target"
+
+  # Codex: AGENTS.md (global guidance). Prose pointer by path; only if Codex is installed.
+  if { [ "$SKILL_TARGET" = "all" ] || [ "$SKILL_TARGET" = "codex" ]; } && [ -d "$HOME/.codex" ]; then
+    local agents_md="$HOME/.codex/AGENTS.md"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      info "(dry-run) would add the workflow pointer to $agents_md"
+    elif [ -f "$agents_md" ] && grep -qF "agent-context.md" "$agents_md" 2>/dev/null; then
+      info "context pointer already present in $agents_md; leaving it"
+    elif printf '\n# r3 research workflow — maintained in r3-tooling\nBefore computational research work, read and follow the r3 research workflow: %s (and the RESEARCH_WORKFLOW.md it points to).\n' "$ctx" >> "$agents_md"; then
+      info "added the workflow pointer to $agents_md"
+    else
+      warn "could not write $agents_md"
+    fi
   fi
+}
+# phase_feedback: install the r3-feedback observer (opt-out, default on). Two parts:
+#   presence   — symlink feedback/skill into each selected agent's skills dir (native discovery);
+#   activation — a session-start pointer in each agent's always-loaded guidance file
+#                (CLAUDE.md for Claude, AGENTS.md for Codex). Activation is load-bearing: a passive
+#                observer isn't triggered by prompt-matching, so the pointer — which references the
+#                SKILL.md by path — is what actually runs it, even where the skills subsystem is off.
+phase_feedback() {
+  [ "$INSTALL_FEEDBACK" = "yes" ] || { info "r3-feedback observer: skipped"; return 0; }
+  local src="$REPO_DIR/feedback/skill" skillmd="$REPO_DIR/feedback/skill/SKILL.md"
+  [ -f "$skillmd" ] || { warn "r3-feedback: $skillmd missing; skipping"; return 0; }
+
+  local act="At the START of every session, read and follow the r3-feedback observer skill at ${skillmd}: silently watch for friction / corrections / steering with the r3 toolchain and append observations to its local log. Observe in the background only — never interrupt or override the user's task, and explicit user instructions always take precedence."
+
+  # activation: idempotently append a session-start block to an agent guidance file.
+  _fb_activate() { # GUIDANCE_FILE
+    local f="$1"
+    if [ "$DRY_RUN" -eq 1 ]; then info "(dry-run) would add the r3-feedback activation to $f"; return 0; fi
+    if [ -f "$f" ] && grep -qF "r3-feedback observer skill" "$f" 2>/dev/null; then
+      info "r3-feedback activation already present in $f; leaving it"; return 0
+    fi
+    mkdir -p "$(dirname "$f")" 2>/dev/null || { warn "r3-feedback: cannot create dir for $f"; return 0; }
+    if printf '\n# r3-feedback observer — maintained in r3-tooling (delete this block to disable)\n%s\n' "$act" >> "$f"; then
+      info "r3-feedback activation added to $f"
+    else
+      warn "r3-feedback: could not write $f"
+    fi
+  }
+
+  case "$SKILL_TARGET" in
+    claude)
+      link_agent_skill "$HOME/.claude" "$HOME/.claude/skills" "$src" r3-feedback
+      _fb_activate "$HOME/.claude/CLAUDE.md"
+      ;;
+    codex)
+      link_agent_skill "$HOME/.codex" "$HOME/.codex/skills" "$src" r3-feedback
+      if [ -d "$HOME/.codex" ]; then _fb_activate "$HOME/.codex/AGENTS.md"; else info "r3-feedback: ~/.codex absent; skipping Codex activation"; fi
+      ;;
+    all|*)
+      link_agent_skill "$HOME/.claude" "$HOME/.claude/skills" "$src" r3-feedback
+      link_agent_skill "$HOME/.codex"  "$HOME/.codex/skills"  "$src" r3-feedback
+      _fb_activate "$HOME/.claude/CLAUDE.md"
+      if [ -d "$HOME/.codex" ]; then _fb_activate "$HOME/.codex/AGENTS.md"; else info "r3-feedback: ~/.codex absent; skipping Codex activation"; fi
+      ;;
+  esac
 }
 print_remote_foreman() {
   local host="${SLURM_SUBMIT_HOST:-${SLURM_HEADNODES[0]:-<cluster-host>}}"
@@ -536,6 +622,10 @@ _update_flags() {
   case "$IMPORT_CONTEXT" in
     yes) f+="$(printf ' --import-context --context-claude-md %q' "$CONTEXT_CLAUDE_MD")";;
     no)  f+=" --no-import-context";;
+  esac
+  case "$INSTALL_FEEDBACK" in
+    yes) f+=" --feedback";;
+    no)  f+=" --no-feedback";;
   esac
   printf '%s' "$f"
 }
@@ -637,6 +727,7 @@ main() {
   phase_skill
   phase_verify
   phase_agent_context
+  phase_feedback
   print_update_command
   [ "$EXIT_CODE" -eq 0 ] && info "done." || warn "finished with errors (see above)."
   exit "$EXIT_CODE"
