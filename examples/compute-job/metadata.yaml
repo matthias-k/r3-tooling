@@ -1,0 +1,18 @@
+# Editable labels. r3 only reads `tags` (a list) and `path` (a /-separated name); everything
+# else here is for you. Unlike the frozen r3.yaml, metadata can change at any time.
+path: PROJECT/experiments/DATE_SLUG/compute
+tags:
+  # The main tag = path + version. A dependency or `r3 find` that selects this job globs the tag
+  # at query time (e.g. {tags: {$glob: PROJECT/experiments/DATE_SLUG/compute/*}}), so the path
+  # hierarchy needn't be listed here.
+  - PROJECT/experiments/DATE_SLUG/compute/v1.0.0
+  - USER                                           # house convention: your username
+  - CLUSTER                                         # house convention: the cluster
+  - compute                                         # semantic tag (cross-cutting filter)
+versions:
+  - version: 1.0.0
+    comment: One-line changelog for this version.
+projects:
+  - PROJECT
+comment: >-
+  One paragraph: what this job computes and why.

@@ -1,0 +1,18 @@
+path: PROJECT/environments/default
+tags:
+  # Main tag = path + version. Queries/dependencies glob it at query time (e.g.
+  # {tags: {$glob: PROJECT/environments/default/*}}); the hierarchy needn't be listed here.
+  - PROJECT/environments/default/v1.0.0
+  - USER
+  - CLUSTER
+  - environment
+versions:
+  - version: 1.0.0
+    comment: >-
+      Flavor B (python-build-standalone) py3.12 env: the scientific stack + a self-contained
+      Quarto for reports. Built into output/ and sealed read-only. No Singularity.
+projects:
+  - PROJECT
+comment: >-
+  Compute environment provided as an r3 dependency, without Singularity: a self-contained,
+  relocatable Python interpreter plus packages, built into output/ and sealed read-only.

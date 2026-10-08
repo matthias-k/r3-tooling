@@ -1,0 +1,13 @@
+# Human intent (unpinned). The exact resolved versions are written to
+# output/requirements.lock.txt on every build — that lock file is the reproducibility record.
+numpy
+scipy
+matplotlib
+pyyaml
+# report tooling: Quarto's jupyter engine executes .qmd Python cells
+ipykernel
+jupyter-client
+jupyter-core
+nbclient
+nbformat
+# --- add your study's packages here (e.g. scikit-learn, pandas, torch, ...) ---

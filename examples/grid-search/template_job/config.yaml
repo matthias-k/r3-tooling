@@ -1,0 +1,4 @@
+# Per-cell config. {MODEL}/{DATASET} are substituted by setup_tasks.py; n_items is a fixed knob.
+model: "{MODEL}"
+dataset: "{DATASET}"
+n_items: 100

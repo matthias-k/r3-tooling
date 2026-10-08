@@ -1,0 +1,3 @@
+# Knobs pulled out of the code, committed so (a) a variant is a config edit, not a code
+# edit, and (b) the report can read the exact values back.
+n: 21

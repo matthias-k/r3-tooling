@@ -1,0 +1,2 @@
+# A container-build job reads only its own container.def — no dependencies.
+dependencies: []

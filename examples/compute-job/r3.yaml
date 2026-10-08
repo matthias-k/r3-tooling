@@ -1,0 +1,11 @@
+# What this job reads. `find_latest` resolves loosely now; `commit` freezes the exact job
+# it resolved to, so results trace back through real edges.
+dependencies:
+  # Compute environment (see examples/environment/). Symlinked at ./env; run its interpreter.
+  - find_latest: { path: PROJECT/environments/default }
+    source: output
+    destination: env
+  # Input dataset (see examples/raw-data/, or a dataset-builder job). Symlinked at ./data.
+  - find_latest: { path: PROJECT/datasets/DATASET }
+    source: output
+    destination: data

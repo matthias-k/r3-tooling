@@ -1,0 +1,7 @@
+# Base dependencies shared by every cell. setup_tasks.py MERGES each cell's own dependencies
+# (e.g. its dataset) into this list before committing the cell — so deps aren't all hard-coded
+# in the template.
+dependencies:
+  - find_latest: { path: PROJECT/environments/default }
+    source: output
+    destination: env

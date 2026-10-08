@@ -1,0 +1,17 @@
+path: PROJECT/containers/default
+tags:
+  # Main tag = path + version. Queries/dependencies glob it at query time (e.g.
+  # {tags: {$glob: PROJECT/containers/default/*}}); the hierarchy needn't be listed here.
+  - PROJECT/containers/default/v1.0.0
+  - USER
+  - CLUSTER
+  - environment
+versions:
+  - version: 1.0.0
+    comment: CUDA base + system libs + Quarto + the study's Python packages.
+projects:
+  - PROJECT
+comment: >-
+  Compute environment as a Singularity image, provided as an r3 dependency. Consumers depend on
+  output/container.sif and run with `singularity exec`. The cluster-side sibling of
+  environment/venv.

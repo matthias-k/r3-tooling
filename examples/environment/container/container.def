@@ -1,0 +1,30 @@
+Bootstrap: docker
+From: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+%files
+    requirements.txt /opt/
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+
+    # System libraries your packages need — the reason to use a container over a venv.
+    apt-get install -yq --no-install-recommends \
+        ca-certificates git wget unzip \
+        python3 python3-pip python3-dev \
+        libjpeg-dev libhdf5-dev
+
+    # Self-contained Quarto, so .qmd reports can render inside the container.
+    QUARTO_VERSION=1.4.550
+    wget -q "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.deb" -O /tmp/quarto.deb \
+        && dpkg -i /tmp/quarto.deb \
+        && rm /tmp/quarto.deb
+
+    # The study's Python packages.
+    python3 -m pip install --no-cache-dir --upgrade pip
+    python3 -m pip install --no-cache-dir -r /opt/requirements.txt
+    rm /opt/requirements.txt
+
+# Keep this lean. Resist baking in dev tooling (ssh/vim/htop) or licensed installers
+# (e.g. MATLAB) — those belong in a separate dev image, not the compute environment every
+# job depends on. A fat base image is slow to build, rebuild, and check out.

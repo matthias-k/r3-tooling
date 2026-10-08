@@ -33,12 +33,13 @@ live in the linked docs (this file is the map, not the spec).
    labeled examples (most environment values already live in `xr3.yaml` + `SETUP.md`, so this is lighter
    than it looks) so colleagues can adopt it on their laptops. Fallback: a `workshop` branch that strips
    specifics.
-3. **`examples/`** — *started*: the house **report scaffold** lives in `examples/report/`
-   (`report.qmd` + `styles.css`; `RESEARCH_WORKFLOW.md` points at it). Still to add: turn the
-   `auto_submit.py` / `setup_tasks.py` family (which still call the now-obsolete monolith) into
-   documented, adaptable templates colleagues can copy, repointed at `xr3` / `xr3-slurm` (Spec §10);
-   an example singularity build script; and an example **venv-based environment r3 job** (the
-   off-cluster environment provider). See `examples/README.md` for the running index.
+3. **`examples/`** — *first batch landed (2026-10-09)*: report scaffold + **compute-job** skeleton,
+   **environment** provider in two flavors (**venv** Flavor-B, sealed read-only + **container**),
+   **grid-search** (`setup_tasks.py` + a resumable, submit-limit-aware `auto_submit.py`, repointed at
+   `xr3`/`xr3-slurm`), and a **raw-data** entry-node stub. Design doc + the "what belongs here"
+   selection principle: `docs/specs/2026-10-06-examples-first-batch-design.md`. Still to come: an
+   end-to-end worked example and a `find_all` aggregation report. See `examples/README.md` for the
+   running index.
 
 ## Finer-grained / tool-level
 
