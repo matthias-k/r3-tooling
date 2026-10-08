@@ -1,0 +1,15 @@
+path: PROJECT/datasets/DATASET_raw
+tags:
+  # Main tag = path + version. Queries/dependencies glob it at query time (e.g.
+  # {tags: {$glob: PROJECT/datasets/*}}); the hierarchy needn't be listed here.
+  - PROJECT/datasets/DATASET_raw/v1.0.0
+  - USER
+  - dataset
+versions:
+  - version: 1.0.0
+    comment: Raw data received and hand-placed in output/; see README.md for provenance.
+projects:
+  - PROJECT
+comment: >-
+  Entry-node job: holds externally-received data that cannot be reproduced by code. The README is
+  the provenance record; the data is copied by hand into output/ after commit. No run step.

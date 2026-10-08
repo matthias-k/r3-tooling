@@ -115,6 +115,9 @@ The directory layout is built to make that automatic:
   A generator (`auto_submit.py` / autoslurm; `gridsearch_meta` / `task_meta` in
   metadata) fans the template out over the axes. Deeply nested `tasks/` trees
   are the norm for the big sweeps in `gold-standard` and `saliency-benchmarking`.
+  A generic, runnable version — template + `setup_tasks.py` + a resumable,
+  submit-limit-aware `auto_submit.py`, repointed at `xr3`/`xr3-slurm` — is in
+  [`examples/grid-search/`](examples/grid-search/).
 
 **Older projects may differ.** These conventions have converged over time;
 pre-existing projects can deviate (e.g. `gaze-combined-datasets` predates the
@@ -131,10 +134,13 @@ how `tags[0]`/`path`/`WIP`/`bug/` are checked, is in
 `extensions/CONTRACT.md` — the single source of truth; this is the
 convention layered on top):
 
-- **`tags[0]` = the primary version tag** = `<path>/vX.Y.Z`. The path is *also* emitted
-  as **nested tags truncated at each level**, each with the `/vX.Y.Z` suffix (e.g.
-  `…/crossval3_seed42/v1.0.0`, `…/CAT2000/v1.0.0`, `…/tasks/v1.0.0`, `…/tasks`) — this
-  is what lets `xr3 find --tag` match at multiple granularities.
+- **`tags[0]` = the primary version tag** = `<path>/vX.Y.Z` — the one tag the tools require
+  (`extensions/CONTRACT.md`). Because a *query* can glob this tag — a dependency in another job's
+  `r3.yaml` (`find_latest`/`find_all` with `{tags: {$glob: …/tasks/*/*/v1.0.0}}`) or an `r3 find`
+  — one main tag already covers every granularity you need. So **don't also emit the path
+  truncated at each level** as its own tag: that was a workaround from before the query grammar
+  had `$glob` (when `find --tag` could only match exactly), and it only clutters the metadata now.
+  (`$glob` is query-side; it never appears in `metadata.yaml` itself.)
 - **identity + type tags** alongside it: username, cluster (`galvani`), project name,
   job type (`analysis`, `report`, `autoslurm`, colon-namespaced like
   `autoslurm:restart_failed`), and **`bug/<name>`** to mark a job (and, by convention,
@@ -174,7 +180,7 @@ Most jobs "run and write `output/`," but that's not the only shape — a job **n
 have a classical run file**. The archetypes in use:
 
 - **Compute → `output/`** (the default). A `run.py` produces artifacts under `output/`;
-  downstream jobs depend on them.
+  downstream jobs depend on them. Skeleton: [`examples/compute-job/`](examples/compute-job/).
 - **Compute + report** — the heavy job and its analysis as two nested jobs; see
   *Experiment structure* for the split and why compute commits first.
 - **Provider / server jobs** — `run.sh` starts a local **server** (e.g. an HTTP server
@@ -185,6 +191,9 @@ have a classical run file**. The archetypes in use:
 - **Container jobs** — a Singularity `.sif` is itself **built as an r3 job** (see
   *Environment & containers*) and consumed by others as a dependency
   (`find_latest: {path: research/containers/default}, source: output/container.sif`).
+  Example: [`examples/environment/container/`](examples/environment/container/). For an
+  off-cluster, no-Singularity alternative — a Python environment built into `output/` and
+  sealed read-only — see [`examples/environment/venv/`](examples/environment/venv/).
 - **Source / entry-node jobs (`_raw`, `src`)** — for non-public datasets and prior-work
   models, commit a **minimal job with no run file** — a `README.md` documenting the
   data's human provenance ("raw data received from X, manually copied to `output/`")
@@ -193,6 +202,7 @@ have a classical run file**. The archetypes in use:
   node** that downstream jobs depend on. Examples: `datasets/MIT300_raw`,
   `datasets/CAT2000_raw`, `…/local_global_attention_model/src`. This is *the* documented
   way to depend on external data until r3 has a first-class option for it.
+  Skeleton: [`examples/raw-data/`](examples/raw-data/).
 - **Probe / spike jobs** — a job set up **exclusively to be dev-run**, to answer a question that
   shapes the *real* job's design: a speed/memory test, a "does this loader/model even work",
   a quick parameter sanity check. You build it with the normal job machinery (env + deps, so the

@@ -1,0 +1,2 @@
+# An environment job builds everything itself — it has no dependencies.
+dependencies: []

@@ -1,0 +1,11 @@
+# Python packages installed into the image. Pin versions here (or in the .def) for a
+# reproducible build; the committed container.sif is the frozen artifact regardless.
+numpy
+scipy
+matplotlib
+pyyaml
+# report tooling (Quarto's jupyter engine executes .qmd Python cells)
+jupyter
+nbclient
+nbformat
+# --- add your study's packages here ---
