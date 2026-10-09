@@ -218,6 +218,18 @@ phase_preflight() {
   done
   [ "$missing" -eq 1 ] && { err "install the missing tools and re-run"; exit 1; }
 
+  # bin dir must be a directory (or not exist yet, so we can create it). If it
+  # already exists as a regular file, a symlink to a non-directory, or a dangling
+  # symlink, `mkdir -p` later fails with "File exists" (and we couldn't write the
+  # wrappers into it anyway). Catch it here — before the clone/venv/npm work —
+  # with an actionable message instead of a confusing failure at the last step.
+  # `[ -d ]` follows symlinks, so a symlink to a real directory is accepted.
+  if { [ -e "$BIN_DIR" ] || [ -L "$BIN_DIR" ]; } && [ ! -d "$BIN_DIR" ]; then
+    err "bin dir $BIN_DIR already exists but is not a directory"
+    err "remove it (e.g. 'rm $BIN_DIR') or pick another with --bin-dir, then re-run"
+    exit 1
+  fi
+
   if [ "$CLONE_PROTO" = "ssh" ]; then
     # ssh -T git@github.com exits 1 on success (no shell); grep for the greeting.
     if ssh -T -o BatchMode=yes -o ConnectTimeout=8 git@github.com 2>&1 | grep -qi "successfully authenticated"; then
