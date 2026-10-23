@@ -8,7 +8,7 @@
 # Array (one cell split into batches):  sbatch --array=0-$((N-1)) run.sh   (N = TOTAL_BATCH_COUNT)
 set -euo pipefail
 
-[ -f output/done ] && exit 0
+[ -f output/done ] && [ "$(cat output/done)" != restart ] && exit 0
 
 # TOTAL_BATCH_COUNT is set by setup_tasks.py for array cells; empty = single-task cell.
 TOTAL_BATCH_COUNT=TOTAL_BATCH_COUNT_PLACEHOLDER

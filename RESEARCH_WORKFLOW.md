@@ -223,7 +223,7 @@ itself are in `extensions/CONTRACT.md`):
   **unchanged both under SLURM and off-cluster** (laptop/workstation): the scratch
   location and the launcher fall back automatically.
   ```bash
-  [ -f output/done ] && exit 0                 # idempotency guard: a complete resubmit no-ops
+  [ -f output/done ] && [ "$(cat output/done)" != restart ] && exit 0   # idempotency guard: a finished resubmit no-ops; a `restart` marker re-runs
   JOB_DIR="${SCRATCH:-$(mktemp -d)}/job"       # node-local scratch under SLURM; a temp dir off-cluster
   r3 checkout $R3_JOB_ID "$JOB_DIR"
   cd "$JOB_DIR"
@@ -533,7 +533,9 @@ How:
 - **Checkpoint at the natural work unit** (per image / batch / trial). On start, **skip units already
   done** — verify by content/key/hash, not bare existence — and write each unit durably as you go.
 - **Signal completion with an `output/done` marker**, never "the output file exists"; consumers gate on
-  it, and guard the entry script (`[ -f output/done ] && exit 0`) so a complete resubmit no-ops.
+  it, and guard the entry script so a complete resubmit no-ops — but let a `restart` marker through
+  (`[ -f output/done ] && [ "$(cat output/done)" != restart ] && exit 0`): a bare
+  `[ -f output/done ]` also matches `restart`, so `xr3-slurm submit --restart-failed` would no-op.
   Resume = resubmit the same job.
 - **Atomicity must match the resume unit.** Atomic-write *per unit* is resumable (separate per-trial
   files via tmp+rename; the keyed on-disk cache in *Config & dependencies* above). Atomic-write of the

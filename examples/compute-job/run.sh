@@ -10,7 +10,7 @@
 # Singularity is required to reproduce the job.
 set -euo pipefail
 
-[ -f output/done ] && exit 0                    # idempotency: a finished job no-ops on resubmit
+[ -f output/done ] && [ "$(cat output/done)" != restart ] && exit 0   # finished: no-op; `restart` marker: re-run
 
 R3_JOB_ID="${R3_JOB_ID:-$(basename "$(pwd)")}"  # committed dir is named by the r3 uuid
 

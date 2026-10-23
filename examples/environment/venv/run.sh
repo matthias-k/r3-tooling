@@ -8,7 +8,7 @@
 # for the annotated version — this is the same template.
 set -euo pipefail
 
-[ -f output/done ] && exit 0
+[ -f output/done ] && [ "$(cat output/done)" != restart ] && exit 0
 
 R3_JOB_ID="${R3_JOB_ID:-$(basename "$(pwd)")}"
 

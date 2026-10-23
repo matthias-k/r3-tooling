@@ -3,7 +3,7 @@
 # reads only its own container.def. Idempotent via output/done.
 set -e
 mkdir -p output
-[ -f output/done ] && { echo "already built"; exit 0; }
+[ -f output/done ] && [ "$(cat output/done)" != restart ] && { echo "already built"; exit 0; }
 
 if singularity build --fakeroot output/container.sif container.def; then
     echo "completed" > output/done
