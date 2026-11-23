@@ -63,16 +63,20 @@ Common flags (all have real defaults, so `--yes` alone is a complete install):
 - `--r3-repo DIR` (default `~/r3_repo`) — becomes `R3_REPOSITORY`.
 - `--slurm-headnode HOST` (repeatable) / `--slurm-submit-host HOST` / `--no-slurm` — SLURM
   config for `xr3-slurm`, or opt out of it entirely.
-- `--clone-proto ssh|https` (default `ssh`) — how `r3` and `foreman` are cloned.
+- `--clone-proto ssh|https` (default `https`) — how `r3` and `foreman` are cloned.
 - `--install-skill` / `--no-install-skill` (plus `--skill-target all|claude|codex`) — install
   the r3 agent skill from §0 as part of the same run.
+- `--feedback` / `--no-feedback` (default off) — install the optional **r3-feedback** observer,
+  which logs toolchain friction to a local, git-ignored log you can share or use to refine your
+  own workflow file. See [`feedback/README.md`](feedback/README.md).
 
-`foreman` is currently **private** — the installer defaults to the `matthias-k/foreman` fork
-(ask the owner for access), tracking its **`dev`** branch (the newer features), and the default
-`ssh` clone proto needs your GitHub SSH key set up (the installer checks this in preflight and
-warns if it can't confirm access). Point `--foreman-remote` elsewhere if you have another source,
-or `--foreman-ref main` for the older branch (r3 itself defaults to `main`); once `foreman` is
-public, `--clone-proto https` works without any key setup.
+`foreman` is cloned from its public upstream, `mtangemann/foreman`, tracking its **`dev`**
+branch (the newer features). All repos are public, so the default `https` clone proto needs no
+key setup; `--clone-proto ssh` gives push-ready clones but needs your GitHub SSH key (the
+installer checks this in preflight and warns if it can't confirm access). Point `--foreman-remote` elsewhere if
+you have another source, or `--foreman-ref main` for the older branch (r3 itself defaults to
+`main`). Re-running the installer on an older install repoints a foreman clone that still tracks
+the former `matthias-k/foreman` fork at upstream.
 
 ## 2. What gets installed
 
@@ -119,8 +123,8 @@ uv venv --python 3.12 ~/r3-toolchain/.venv
 ### 3.2 Clone and editable-install r3 and foreman
 
 ```bash
-git clone git@github.com:mtangemann/r3.git ~/r3-toolchain/r3
-git clone --branch dev git@github.com:matthias-k/foreman.git ~/r3-toolchain/foreman   # private fork — needs access; dev has the newer features
+git clone https://github.com/mtangemann/r3.git ~/r3-toolchain/r3
+git clone --branch dev https://github.com/mtangemann/foreman.git ~/r3-toolchain/foreman   # dev has the newer features
 
 uv pip install --python ~/r3-toolchain/.venv/bin/python \
   -e ~/r3-toolchain/r3 -e ~/r3-toolchain/foreman

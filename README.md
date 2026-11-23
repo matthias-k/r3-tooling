@@ -25,8 +25,8 @@ rather than silently taking defaults.
 > ```bash
 > git clone https://github.com/matthias-k/r3-tooling.git && cd r3-tooling && ./install.sh
 > ```
-> `r3` and `r3-tooling` are public; `foreman` is still private, so its clone needs GitHub
-> access — the installer's default `--clone-proto ssh` handles that.
+> `r3`, `foreman`, and `r3-tooling` are all public, so the installer clones over https and
+> needs no GitHub key (`--clone-proto ssh` if you want push-ready clones).
 
 Re-run any time to update — the installer saves a `<toolchain-root>/update.sh`. Everything
 lives in one canonical clone at `<toolchain-root>/r3-tooling`, so there's no "which clone?"
@@ -49,6 +49,9 @@ confusion. Full details — flags, manual steps, SLURM, the foreman tunnel — a
 - **[`examples/`](examples/README.md)** — copy-and-adapt starting points for the pieces
   the workflow describes (the report scaffold today; container/venv jobs and the sweep
   helpers to come).
+- **[`feedback/`](feedback/README.md)** — **r3-feedback**, an optional (opt-in, local-only)
+  agent observer that logs friction with the toolchain while you work — to send to the
+  maintainer, or to refine your own workflow file. Enable with `install.sh --feedback`.
 - **`bootstrap.sh` / `install.sh`** — the one-command installer (above).
 
 ## Using the r3 skill on its own
