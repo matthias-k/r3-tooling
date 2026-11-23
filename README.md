@@ -1,5 +1,10 @@
 # r3-tooling
 
+> **This `builder-camp` branch is retired.** Use [`main`](https://github.com/matthias-k/r3-tooling/tree/main)
+> instead. If you installed from this branch, just run your `update.sh` once: it moves the install
+> to `main` (and foreman to its public upstream, `mtangemann/foreman`), asking first if you're at a
+> terminal. Everything below is the old workshop README, kept for reference.
+
 **r3-tooling** is the house toolchain around [r3](https://github.com/mtangemann/r3): an
 agent-facing **r3 skill**, the **`xr3` / `xr3-slurm`** command-line tools, the house
 **`RESEARCH_WORKFLOW.md`** conventions, and a one-command **installer** that wires it all up

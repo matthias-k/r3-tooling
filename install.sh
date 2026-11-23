@@ -706,8 +706,101 @@ relocate_if_needed() {
   eval "exec env R3_NO_RELOCATE=1 $(printf '%q' "$canon/install.sh") $flags"
 }
 
+# ---- builder-camp sunset -------------------------------------------------------
+# The builder-camp branch is retired: foreman is public upstream (mtangemann/foreman) and
+# everything the camp needed now lives on main. This is the branch's final commit — its only
+# job is to move an install (usually reached via update.sh) onto main, then hand off to main's
+# installer with the same flags. The old camp installer stays below as camp_main, used only if
+# the user declines or the move can't be done safely.
+SUNSET_MIRROR="matthias-k/foreman-ai-builder-camp"
+
+# _sunset_switch DIR BRANCH LABEL: check out origin/BRANCH in a clean clone (fetch first).
+_sunset_switch() {
+  local dir="$1" branch="$2" label="$3"
+  if [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]; then
+    err "$label ($dir) has local changes; can't switch it to '$branch'. Commit/stash them and re-run."
+    return 1
+  fi
+  git -C "$dir" fetch --quiet origin || { err "$label: fetch failed"; return 1; }
+  if git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$dir" switch --quiet "$branch" && git -C "$dir" merge --quiet --ff-only "origin/$branch"
+  else
+    git -C "$dir" switch --quiet -c "$branch" --track "origin/$branch"
+  fi || { err "$label: could not switch to '$branch' (resolve manually in $dir)"; return 1; }
+  info "$label: now on '$branch'"
+}
+
+sunset_migrate() {
+  local cur; cur="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [ "$cur" = "builder-camp" ] || return 0   # not a camp checkout; nothing to do
+
+  local fdir="$TOOLCHAIN_ROOT/foreman" forigin="" fnew=""
+  [ -d "$fdir/.git" ] && forigin="$(git -C "$fdir" remote get-url origin 2>/dev/null || true)"
+  case "$forigin" in
+    *"$SUNSET_MIRROR"*)
+      case "$forigin" in
+        git@*|ssh://*) fnew="git@github.com:mtangemann/foreman.git";;
+        *)             fnew="https://github.com/mtangemann/foreman.git";;
+      esac;;
+  esac
+
+  printf '\n'
+  warn "The 'builder-camp' branch of r3-tooling is retired; this install should move to 'main'."
+  info "This will:"
+  info "  - switch $REPO_DIR from 'builder-camp' to 'main'"
+  [ -n "$fnew" ] && info "  - repoint foreman ($fdir) from the camp mirror to $fnew, and switch it to 'dev'"
+  info "  - re-run main's installer with your settings (it also rewrites update.sh)"
+  info "Your r3 jobs, repository, config, and r3-feedback logs are not touched."
+  if [ "$DRY_RUN" -eq 1 ]; then info "(dry-run) nothing changed; run without --dry-run to migrate."; exit 0; fi
+
+  # Confirm on a terminal even under --yes (update.sh always passes --yes): this changes what
+  # the install tracks, so a person at the keyboard should see it once. Without a terminal
+  # (e.g. a scheduled update) go ahead: staying on a retired branch only strands the install.
+  if have_tty; then
+    local ans=""; read -r -p "Move this install to main now? [yes]: " ans < /dev/tty || true
+    case "${ans:-yes}" in
+      y|Y|yes|YES) ;;
+      *) warn "staying on builder-camp for now; it gets no further updates and will be deleted."
+         warn "re-run update.sh (or install.sh) to migrate later."
+         return 0;;
+    esac
+  fi
+
+  if ! _sunset_switch "$REPO_DIR" main "r3-tooling"; then
+    warn "migration not done; continuing with the old builder-camp installer."
+    return 0
+  fi
+  if [ -n "$fnew" ]; then
+    if git -C "$fdir" remote set-url origin "$fnew"; then
+      info "foreman: origin -> $fnew"
+      _sunset_switch "$fdir" dev "foreman" \
+        || warn "foreman not switched to 'dev'; main's installer will report it — fix in $fdir and re-run update.sh"
+    else
+      warn "foreman: could not repoint origin; fix manually in $fdir"
+    fi
+  fi
+
+  # Hand off to main's installer with the same arguments; the camp default '--foreman-ref main'
+  # (the mirror's branch) becomes upstream's 'dev'. Any explicit other ref is kept.
+  local args=() prev=""
+  local a; for a in ${SUNSET_ARGS[@]+"${SUNSET_ARGS[@]}"}; do
+    if [ "$prev" = "--foreman-ref" ] && [ "$a" = "main" ]; then a="dev"; fi
+    args+=("$a"); prev="$a"
+  done
+  info "migrated; re-running main's installer"
+  exec "$REPO_DIR/install.sh" ${args[@]+"${args[@]}"}
+}
+
 main() {
+  SUNSET_ARGS=("$@")
   parse_args "$@"
+  sunset_migrate
+  # Not migrated (declined / not possible / not a camp checkout): run the old installer.
+  camp_main
+}
+
+# camp_main: the old builder-camp installer, unchanged except that main() already parsed the args.
+camp_main() {
   # Resolve interactivity once: prompt on the terminal, or use defaults under --yes.
   # No terminal and no --yes is an error — accepting all defaults must be deliberate.
   if [ "$ASSUME_YES" -eq 1 ]; then
